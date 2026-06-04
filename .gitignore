@@ -1,0 +1,10 @@
+# OneDrive / Windows artifacts
+desktop.ini
+Thumbs.db
+
+# Machine-local Claude Code config (keep .claude/skills/ — it's project content)
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.pyc

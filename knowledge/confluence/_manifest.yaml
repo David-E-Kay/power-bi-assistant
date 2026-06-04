@@ -1,0 +1,31 @@
+# Confluence Page Cache Manifest
+#
+# Owned by: .claude/skills/confluence-cache/SKILL.md
+# Schema:   .claude/skills/confluence-cache/references/manifest-format.md
+#
+# Each entry under `pages:` is one cached Confluence page committed to
+# knowledge/confluence/<slug>.md. The confluence-cache skill writes/updates
+# entries here after every successful fetch. Hand-edits are allowed — on
+# the next skill run, new entries are back-filled (fetched + stored).
+#
+# Removing an entry here does NOT delete the cached .md file. Use the
+# skill's "remove" branch (which deletes both) or remove both manually.
+
+site:
+  cloud_id: 2bc1c319-f147-4244-b7e5-a024ba5a53fc
+  url: https://triconah.atlassian.net
+  # Default space for "list pages in our space" queries. The skill can
+  # still cache pages from any space the user references by URL or ID.
+  primary_space:
+    key: DATA
+    id: "469499920"
+    name: Data and Analytics
+
+pages:
+  - id: "2475098115"
+    space_key: "DATA"
+    slug: "sop-dax-and-data-modeling"
+    title: "[SOP] DAX and Data Modeling"
+    url: "https://triconah.atlassian.net/wiki/spaces/DATA/pages/2475098115/SOP+DAX+and+Data+Modeling"
+    last_modified: "Apr 10, 2026"
+    last_synced: "2026-05-09T00:00:00Z"

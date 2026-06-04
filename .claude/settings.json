@@ -1,0 +1,48 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(cat *)",
+      "Bash(ls *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(wc *)",
+      "Bash(diff *)",
+      "Bash(type *)",
+      "Bash(dir *)",
+      "Bash(more *)",
+      "Bash(cd *)",
+      "Bash(mkdir *)",
+      "Bash(copy *)",
+      "Bash(cp *)",
+      "Bash(git pull*)",
+      "Bash(git status*)",
+      "Bash(git log*)",
+      "Read(*)",
+      "Write(knowledge/*)",
+      "Write(skills/*)",
+      "Write(scripts/*)",
+      "Write(artifacts/*)",
+      "Write(output/*)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(del /s *)",
+      "Bash(format *)",
+      "Write(.claude/*)"
+    ]
+  },
+  "model": "claude-opus-4-6",
+  "effortLevel": "high",
+  "enabledPlugins": {
+    "tabular-editor@power-bi-agentic-development": true,
+    "semantic-models@power-bi-agentic-development": true,
+    "reports@power-bi-agentic-development": true,
+    "pbip@power-bi-agentic-development": true,
+    "pbi-desktop@power-bi-agentic-development": true,
+    "fabric-cli@power-bi-agentic-development": true
+  }
+}

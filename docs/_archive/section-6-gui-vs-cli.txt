@@ -1,0 +1,44 @@
+================================================================================
+ARCHIVED: Section 6 — Code Execution: GUI vs CLI
+Source: docs/regression-testing-guide.html (formerly regression-testing-guide-demo.html)
+Removed: 2026-05-02
+Reason:  TE CLI workflow has not been validated against the team's setup. Removed
+         from the onboarding HTML to avoid confusing new users until the CLI path
+         is tested end-to-end and the local-only constraint is enforced for it.
+================================================================================
+
+6. Code Execution: GUI vs CLI
+
+Both produce identical output. Pick based on whether you're iterating
+interactively or automating.
+
+--------------------------------------------------------------------------------
+Complete CLI session example (PowerShell)
+--------------------------------------------------------------------------------
+
+# One-time setup
+set OUTPUT_DIR=C:\Users\dkay\Desktop\PBI-Regression
+set MODEL_NAME=Maintenance and Construction
+
+# Baseline capture against original model
+set SNAPSHOT_LABEL=baseline
+TabularEditor.exe "C:\path\to\original.bim" -S "output\mc-regression.csx"
+
+# Apply your change, then refactored capture
+set SNAPSHOT_LABEL=refactored
+TabularEditor.exe "C:\path\to\refactored.bim" -S "output\mc-regression.csx"
+
+# Compare — produces regression-report.xlsx
+python scripts\compare-snapshots.py "%OUTPUT_DIR%\baseline.json" "%OUTPUT_DIR%\refactored.json"
+
+--------------------------------------------------------------------------------
+CLI environment variable contract
+--------------------------------------------------------------------------------
+
+Env Var              Default                       What it controls
+-------------------  ----------------------------  ----------------------------
+SNAPSHOT_LABEL       "refactor"                    Output filename label
+MODEL_NAME           placeholder                   Written to JSON header
+OUTPUT_DIR           Desktop\PBI-Regression        Where snapshots land
+TEAMS_WEBHOOK_URL    (empty)                       Optional completion notification
+QUERY_TIMEOUT_MS     60000                         Per-query wall-clock timeout
