@@ -187,13 +187,13 @@ For the `.bim` route, this is a **one-time setup per model** — re-run only whe
 python scripts/bim_to_kb_markdown.py "C:\models\{model}.bim" --output artifacts/model-schema/{model-name}.md
 ```
 
-After parsing, tell Claude something like *"index `artifacts/model-schema/mc.md`"* and you're ready for Phase 1.
+After parsing, tell Claude something like *"index `artifacts/model-schema/{model}.md`"* and you're ready for Phase 1.
 
 ### The four phases
 
 | Phase | What you do | What gets produced |
 |---|---|---|
-| **1 — Select Measures** | Describe the measures you want to profile ("all project cost measures, skip budget and time intelligence"). Claude proposes a list grouped by domain, applies exclusions, presents for confirmation. | Confirmed measure list |
+| **1 — Select Measures** | Describe the measures you want to profile ("all [Domain A] cost measures, skip budget and time intelligence"). Claude proposes a list grouped by domain, applies exclusions, presents for confirmation. | Confirmed measure list |
 | **2 — Configure Dimensions and Filters** | With Claude: pick single-slice dimensions, an optional cross-product context (with TREATAS value filters for slicer simulation), global filters, TOPN cap. | Confirmed test matrix |
 | **3 — Generate the Script** | Claude copies the read-only `benchmark-measures.csx` template to `output/{label}.csx`, populates the 6 configuration sections, reads back to you for confirmation. | Populated `output/{label}.csx` |
 | **4 — Run and Interpret** | Open `output/{label}.csx` in TE3 (with PBI Desktop already running and TE3 connected), press <kbd>F5</kbd>. Sort `{label}-timing.csv` by `duration_ms`. | Optimization priority list |
@@ -215,7 +215,7 @@ flowchart TD
 **Phase 1 — Measure selection criteria**
 
 The user describes measures using one or more approaches:
-- **Domain description (semantic search)** — "all measures for Homes Serviced, Work Order Costs and Counts, and Project Cost and Counts, excluding all budget measures and all time intelligence variations"
+- **Domain description (semantic search)** — "all measures for [Domain A], [Domain B] costs and counts, and [Domain C] counts, excluding all budget measures and all time intelligence variations"
 - **Explicit list** — paste measure names directly; Claude validates against the model
 - **Hybrid** — domain description plus specific additions or removals
 
@@ -228,7 +228,7 @@ Common exclusion categories to clarify with Claude:
 
 - **Single-slice dimensions** — each generates a separate query per measure with `SUMMARIZECOLUMNS('Table'[Column], "Result", [Measure])`. One row per distinct value.
 - **Cross-product context** — one combined `SUMMARIZECOLUMNS` with multiple grouping columns, optionally constrained by TREATAS filter arguments. Mimics a matrix visual with multiple axes and slicers — the most expensive query shape and often where performance issues hide.
-- **Global filters** — KEEPFILTERS applied to every query. Mimics report-level filters ("Calendar[Year] = 2025", "Properties[Same Home] = Y").
+- **Global filters** — KEEPFILTERS applied to every query. Mimics report-level filters ("'Date'[Year] = 2025", "'Table A'[Column A] = Value 1").
 - **TOPN cap** — `maxRowsPerContext`. Default 0 = no cap. Use 50–100 only if high-cardinality dimensions cause timeouts; otherwise keep 0 to measure full query cost.
 
 If the cross-product row count is very high (>5,000 distinct combinations), narrow it with TREATAS value filters or use TOPN — otherwise you'll hit timeouts on every measure regardless of DAX quality.
@@ -304,11 +304,11 @@ Cross-product contexts use `TREATAS` to constrain specific columns to user-selec
 
 ```dax
 SUMMARIZECOLUMNS(
-    'Properties'[Property Market],
-    'Calendar'[Calendar Month],
-    'Projects'[Project Scope Type Desc],
-    TREATAS({"Turn"}, 'Projects'[Project Scope Type Desc]),
-    "Result", [Project Cost by Completed Date]
+    'Table A'[Column A],
+    'Date'[Month],
+    'Table C'[Column C],
+    TREATAS({"Value 1"}, 'Table C'[Column C]),
+    "Result", [Measure A]
 )
 ```
 
@@ -333,40 +333,40 @@ Everything else in the file — helpers, smoke test loop, watchdog, ADOMD execut
 
 ## 8. First-Day Walkthrough
 
-**Scenario:** Profile the project and work-order cost/count measures in the M&C model, current year only, sliced by Market / Month / Scope Type, with a Turn-only cross-product to mirror a known slow report page.
+**Scenario:** Profile the [Domain A] and [Domain B] cost/count measures, current year only, sliced by Column A / Month / Column C, with a Value 1-only cross-product to mirror a known slow report page.
 
 ### Step 1: Plan with Claude (5 min)
 
 ```
-You: I want to benchmark all the project measures and work order cost
-     measures in M&C. Skip budget and time intel. Slice by Market, Month,
-     and Scope Type. Cross-product those same three with Scope Type
-     filtered to Turn only. Global filter to 2025.
+You: I want to benchmark all the [Domain A] measures and [Domain B] cost
+     measures. Skip budget and time intel. Slice by Column A, Month,
+     and Column C. Cross-product those same three with Column C
+     filtered to Value 1 only. Global filter to 2025.
 ```
 
 Claude:
 1. Confirms the model and reads the `.bim` schema markdown
-2. Proposes a list of ~25 measures grouped by domain (Project Costs / Project Counts / Work Order Costs / Work Order Counts / Homes Serviced)
+2. Proposes a list of ~25 measures grouped by domain ([Domain A] Costs / [Domain A] Counts / [Domain B] Costs / [Domain B] Counts / [Domain C])
 3. Lists what it filtered out (e.g., 12 time-intelligence variants, 3 budget measures) so you can verify
 4. You say "looks good" or "also drop X"
 
 ### Step 2: Configure (2 min)
 
 Claude proposes:
-- **Single-slice:** `by_market`, `by_month`, `by_project_scope`
-- **Cross-product:** Market × Month × Scope Type, with TREATAS constraining Scope Type to `{"Turn"}`
-- **Global filter:** `'Calendar'[Start of Year] = DATE(2025, 1, 1)`
+- **Single-slice:** `by_col_a`, `by_month`, `by_col_c`
+- **Cross-product:** Column A × Month × Column C, with TREATAS constraining Column C to `{"Value 1"}`
+- **Global filter:** `'Date'[Start of Year] = DATE(2025, 1, 1)`
 - **TOPN:** 0 (no cap — you want full query cost)
 
 Estimated test matrix: 25 measures × (1 grand_total + 3 single-slice + 1 cross-product) = 125 test cases. At ~2 s average per query, expect ~4 minutes of runtime plus smoke testing.
 
 ### Step 3: Generate the script (1 min)
 
-Claude copies `scripts/benchmark-measures.csx` to `output/mc-projects-benchmark.csx`, populates the 6 sections, reads them back to you in chat for confirmation. You say "ship it."
+Claude copies `scripts/benchmark-measures.csx` to `output/{model}-benchmark.csx`, populates the 6 sections, reads them back to you in chat for confirmation. You say "ship it."
 
 ### Step 4: Run (~5 min)
 
-Open `output/mc-projects-benchmark.csx` in TE3 (with PBI Desktop already open and TE3 connected), press <kbd>F5</kbd>. The script:
+Open `output/{model}-benchmark.csx` in TE3 (with PBI Desktop already open and TE3 connected), press <kbd>F5</kbd>. The script:
 1. Smoke-tests all 25 measures (~30s)
 2. Runs the 125 test cases sequentially, streaming timing to `{label}-timing.csv`
 3. Writes `{label}-config.csv` (filter context audit), `{label}-testplan.json` (manifest), and `{label}-timeouts.log` only if anything timed out or smoke-failed
@@ -376,7 +376,7 @@ The TE3 `Info()` popup on completion shows Top 10 Slowest (ok-only), smoke-skipp
 
 ### Step 5: Triage (~10 min)
 
-Open `Desktop\PBI-Benchmark\mc-projects-benchmark-timing.csv` in Excel. Sort by `duration_ms` descending. The top 10 entries are your optimization candidates. Cross-reference with `{label}-timeouts.log` to distinguish wall-clock timeouts from memory cancels (read the `Type:` tag).
+Open `Desktop\PBI-Benchmark\{model}-benchmark-timing.csv` in Excel. Sort by `duration_ms` descending. The top 10 entries are your optimization candidates. Cross-reference with `{label}-timeouts.log` to distinguish wall-clock timeouts from memory cancels (read the `Type:` tag).
 
 End-to-end: about 25 minutes total. The bulk of value is in steps 1–2 — getting the right measure list and context — because that determines whether your timing data maps to the queries your users actually run.
 

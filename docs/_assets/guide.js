@@ -236,7 +236,7 @@ function testWebhook() {
   });
 }
 function updateOutdirCmd() {
-  const path = document.getElementById('outdirPath').value || 'C:\\Users\\dkay\\Desktop\\PBI-Regression';
+  const path = document.getElementById('outdirPath').value || 'C:\\path\\to\\PBI-Regression';
   const cmdEl = document.getElementById('outdirCmd');
   cmdEl.textContent = `[Environment]::SetEnvironmentVariable("OUTPUT_DIR", "${path}", "User")`;
   // re-highlight

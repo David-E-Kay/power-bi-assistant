@@ -103,7 +103,7 @@
     <strong style="color: var(--accent);">💬 What Claude can do for you in chat</strong>
     <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem;">Phase 1 is heavily <em>conversational</em> — you don't paste measure names manually. From a description of what you want to profile, Claude can:</p>
     <ul style="margin: 0.5rem 0 0 0; font-size: 0.9rem; padding-left: 1.25rem;">
-      <li>Read the model and propose a <strong>measure list grouped by domain</strong> (e.g., Project Costs / Work Order Counts / Homes Serviced)</li>
+      <li>Read the model and propose a <strong>measure list grouped by domain</strong> (e.g., [Domain A] Costs / [Domain B] Counts / [Domain C])</li>
       <li>Apply <strong>exclusions in plain language</strong> — "skip time intelligence", "drop budget measures", "exclude anything <code>_</code>-prefixed"</li>
       <li>Recommend <strong>dimensions, cross-product context, TREATAS value filters, global filters, TOPN cap</strong> for the test matrix</li>
       <li>Populate the <strong>6 editable sections</strong> of the benchmark script:
@@ -221,7 +221,7 @@ flowchart LR
   <table>
     <thead><tr><th>Phase</th><th>What you do</th><th>What gets produced</th></tr></thead>
     <tbody>
-      <tr><td><strong>1 — Select Measures</strong></td><td>Describe the measures to profile ("all project cost measures, skip budget and time intel"). Claude proposes a list grouped by domain, applies exclusions, presents for confirmation.</td><td>Confirmed measure list</td></tr>
+      <tr><td><strong>1 — Select Measures</strong></td><td>Describe the measures to profile ("all [Domain A] cost measures, skip budget and time intel"). Claude proposes a list grouped by domain, applies exclusions, presents for confirmation.</td><td>Confirmed measure list</td></tr>
       <tr><td><strong>2 — Configure Test Matrix</strong></td><td>With Claude: pick single-slice dimensions, optional cross-product context (with TREATAS value filters), global filters, TOPN cap.</td><td>Confirmed dimensions + filters</td></tr>
       <tr><td><strong>3 — Generate Script</strong></td><td>Claude copies the read-only template to <code>output/{label}.csx</code> and populates the 6 sections. Reads back to you for confirmation.</td><td>Populated <code>output/{label}.csx</code></td></tr>
       <tr><td><strong>4 — Run + Interpret</strong></td><td>Open <code>output/{label}.csx</code> in TE3, press <kbd>F5</kbd>. Sort the timing CSV by <code>duration_ms</code>. Triage timeouts via the <code>Type:</code> tag in the timeouts log.</td><td>Optimization priority list</td></tr>
@@ -243,7 +243,7 @@ flowchart TD
   <h3>Decision points reference</h3>
   <p><strong>Phase 1 — Measure selection criteria.</strong> Three approaches:</p>
   <ul>
-    <li><strong>Domain description (semantic search):</strong> "All measures for Homes Serviced, Work Order Costs and Counts, and Project Cost and Counts, excluding all budget measures and all time intelligence variations"</li>
+    <li><strong>Domain description (semantic search):</strong> "All measures for [Domain A], [Domain B] costs and counts, and [Domain C] counts, excluding all budget measures and all time intelligence variations"</li>
     <li><strong>Explicit list:</strong> paste measure names directly; Claude validates against the model</li>
     <li><strong>Hybrid:</strong> domain description plus specific additions or removals</li>
   </ul>
@@ -279,20 +279,20 @@ flowchart TD
   </ol>
   <p>What a populated cross-product config looks like once Claude is done:</p>
   <div class="code-wrap">
-    <pre><code class="language-csharp">measures.Add("Project Cost by Completed Date");
-measures.Add("Work Order Costs by Completed Date");
+    <pre><code class="language-csharp">measures.Add("[Measure A]");
+measures.Add("[Measure B]");
 
-singleSliceDimensions["by_market"] = "'Properties'[Property Market]";
-singleSliceDimensions["by_month"] = "'Calendar'[Calendar Month]";
+singleSliceDimensions["by_col_a"] = "'Table A'[Column A]";
+singleSliceDimensions["by_month"] = "'Date'[Month]";
 
-crossProductColumns.Add("'Properties'[Property Market]");
-crossProductColumns.Add("'Calendar'[Calendar Month]");
-crossProductColumns.Add("'Projects'[Project Scope Type Desc]");
+crossProductColumns.Add("'Table A'[Column A]");
+crossProductColumns.Add("'Date'[Month]");
+crossProductColumns.Add("'Table C'[Column C]");
 
-crossProductValueFilters["'Projects'[Project Scope Type Desc]"] =
-    new List&lt;string&gt; { "Turn" };
+crossProductValueFilters["'Table C'[Column C]"] =
+    new List&lt;string&gt; { "Value 1" };
 
-globalFilters.Add("'Calendar'[Start of Year] = DATE(2025, 1, 1)");
+globalFilters.Add("'Date'[Start of Year] = DATE(2025, 1, 1)");
 maxRowsPerContext = 0;</code></pre>
   </div>
   <p>Once you've reviewed the populated file in chat and given the green light, open <code>output/{label}.csx</code> in TE3 (with TE3 already connected to your model — see §1's pre-run callout) and press <kbd>F5</kbd>. That's the hand-off into Part 2.</p>
@@ -313,14 +313,14 @@ maxRowsPerContext = 0;</code></pre>
   <div class="code-wrap">
     <pre><code class="language-sql">EVALUATE
 SUMMARIZECOLUMNS(
-    'Properties'[Property Market],
-    'Calendar'[Calendar Month],
-    'Projects'[Project Scope Type Desc],
-    TREATAS({"Turn"}, 'Projects'[Project Scope Type Desc]),
+    'Table A'[Column A],
+    'Date'[Month],
+    'Table C'[Column C],
+    TREATAS({"Value 1"}, 'Table C'[Column C]),
     "Result",
         CALCULATE(
-            [Project Cost by Completed Date],
-            KEEPFILTERS('Calendar'[Start of Year] = DATE(2025, 1, 1))
+            [Measure A],
+            KEEPFILTERS('Date'[Start of Year] = DATE(2025, 1, 1))
         )
 )</code></pre>
   </div>
@@ -329,13 +329,13 @@ SUMMARIZECOLUMNS(
 
 <section id="walkthrough" data-layer="3">
   <h2><span class="layer-badge l3">Layer 3</span>7. First-Day Walkthrough</h2>
-  <p><strong>Scenario:</strong> Profile the project and work-order cost/count measures in the M&amp;C model, current year only, sliced by Market / Month / Scope Type, with a Turn-only cross-product to mirror a known slow report page.</p>
+  <p><strong>Scenario:</strong> Profile the [Domain A] and [Domain B] cost/count measures, current year only, sliced by Column A / Month / Column C, with a Value 1-only cross-product to mirror a known slow report page.</p>
 
   <div class="checklist" data-checklist="walkthrough-steps-bench">
     <div class="checklist-title">First-day walkthrough <span class="checklist-progress"></span></div>
     <ul>
-      <li><input type="checkbox" id="bwt1"><label for="bwt1"><strong>Step 1:</strong> Plan with Claude — describe the domains ("project measures, work order costs and counts"), exclusions ("skip budget and time intel"), dimensions, and global filter (~5 min)</label></li>
-      <li><input type="checkbox" id="bwt2"><label for="bwt2"><strong>Step 2:</strong> Confirm dimensions and cross-product — single-slice by Market / Month / Scope Type, cross-product all three with Scope = Turn, global filter Calendar[Start of Year] = 2025, TOPN 0</label></li>
+      <li><input type="checkbox" id="bwt1"><label for="bwt1"><strong>Step 1:</strong> Plan with Claude — describe the domains ("[Domain A] measures, [Domain B] costs and counts"), exclusions ("skip budget and time intel"), dimensions, and global filter (~5 min)</label></li>
+      <li><input type="checkbox" id="bwt2"><label for="bwt2"><strong>Step 2:</strong> Confirm dimensions and cross-product — single-slice by Column A / Month / Column C, cross-product all three with Column C = Value 1, global filter 'Date'[Start of Year] = 2025, TOPN 0</label></li>
       <li><input type="checkbox" id="bwt3"><label for="bwt3"><strong>Step 3:</strong> Have Claude populate <code>output/{label}.csx</code> — Claude copies the template and fills in the 6 sections, reads them back for confirmation (~1 min)</label></li>
       <li><input type="checkbox" id="bwt4"><label for="bwt4"><strong>Step 4:</strong> Open in TE3, press <kbd>F5</kbd> — smoke test (~30s) + main loop (~4 min for 125 test cases)</label></li>
       <li><input type="checkbox" id="bwt5"><label for="bwt5"><strong>Step 5:</strong> Open <code>{label}-timing.csv</code> in Excel, sort by <code>duration_ms</code> descending — top 10 are your optimization candidates (~10 min triage)</label></li>
@@ -506,12 +506,12 @@ SUMMARIZECOLUMNS(
             <div class="admin-step" data-step="1">
               <h4>Pick a folder for outputs</h4>
               <p><code>OUTPUT_DIR</code> is shared between the benchmark script and the regression script — both write timing CSVs / snapshots / logs to whatever path it points at. Default is <code>Desktop\PBI-Regression</code> for regression and <code>Desktop\PBI-Benchmark</code> for benchmarks; either folder works for both, or pick a single shared location:</p>
-              <input type="text" id="outdirPath" class="admin-input" value="C:\Users\dkay\Desktop\PBI-Regression" oninput="updateOutdirCmd()">
+              <input type="text" id="outdirPath" class="admin-input" value="C:\path\to\PBI-Regression" oninput="updateOutdirCmd()">
             </div>
             <div class="admin-step" data-step="2">
               <h4>Persist the env var (PowerShell)</h4>
               <div class="code-wrap">
-                <pre><code class="language-powershell" id="outdirCmd">[Environment]::SetEnvironmentVariable("OUTPUT_DIR", "C:\Users\dkay\Desktop\PBI-Regression", "User")</code></pre>
+                <pre><code class="language-powershell" id="outdirCmd">[Environment]::SetEnvironmentVariable("OUTPUT_DIR", "C:\path\to\PBI-Regression", "User")</code></pre>
               </div>
               <div class="admin-actions">
                 <button class="btn btn-primary" onclick="markCardDone('outdir')">Mark as done</button>

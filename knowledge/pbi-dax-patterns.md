@@ -9,7 +9,7 @@
 - **Pattern:**
   ```dax
   IF(
-      ISINSCOPE(DimProperty[PropertyName]) && HASONEVALUE(DimCalendar[MonthYear]),
+      ISINSCOPE('Table A'[Column A]) && HASONEVALUE('Date'[Month]),
       // Row-level logic here
       [Row Level Measure],
       // Total-level logic here
@@ -26,7 +26,7 @@
   ```dax
   CALCULATE(
       [Base Measure],
-      USERELATIONSHIP(DimCalendar[DateKey], FactTable[TargetDateColumn])
+      USERELATIONSHIP('Date'[Date], 'Table A'[Column A])
   )
   ```
 - **Gotchas:**
@@ -42,7 +42,7 @@
 - **Validated:** 2026-03-10
 - **Affected model:** All
 
-## Proportionate weighted average (e.g., Work Order Age)
+## Proportionate weighted average (e.g., a count-weighted age metric)
 - **When to use:** Weighted averages where the weight is a count and the average must be proportionate to the contributing rows, not a simple average of averages
 **Pattern:** Pre-compute ownership pct as calc column on snapshot/fact table via
   LOOKUPVALUE, then SUMX(VALUES(keys), age * pct) / SUMX(VALUES(keys), pct)
@@ -71,14 +71,14 @@
       )
 
   // Option B — extract BaseCalc into its own helper measure, then pass the measure reference
-  [Homes Serviced Cost Internally Base] =
+  [Measure A Base] =
   CALCULATE( SUM('Fact'[Amount]), <filters> )
 
-  [Homes Serviced Cost Internally] =
+  [Measure A] =
   IF(
       [Proportionate Toggle] = "Yes",
-      Proportionate( [Homes Serviced Cost Internally Base] ),
-      [Homes Serviced Cost Internally Base]
+      Proportionate( [Measure A Base] ),
+      [Measure A Base]
   )
   ```
 - **❌ Incorrect pattern — silently wrong results:**
@@ -99,7 +99,7 @@
 ## Distinct count via VALUES iteration (prefer over DISTINCTCOUNT)
 - **When to use:** Any measure that needs a count of distinct values in a column, especially
   when the measure also involves relationship activation (USERELATIONSHIP / CROSSFILTER) or
-  proportionate ownership logic.
+  proportionate weighting logic.
 - **Pattern:**
   ```dax
   // ✅ Preferred — leverages Vertipaq dictionary directly
@@ -116,15 +116,15 @@
   contexts that involve relationship traversals. The gap widens when the alternative
   DISTINCTCOUNT version must activate relationships inside an iterator — VALUES resolves
   distinctness before the iteration, avoiding repeated SE queries.
-- **Example (M&C):** `Open Work Order Vendors Count` — proportionate branch uses
-  `SUMMARIZE` over Open Work Orders grouped by `[Work Order Vendor Key]` and `[_OwnershipPct]`,
-  then sums the pct. Non-proportionate branch uses `SUMX(VALUES(...), 1)` instead of
+- **Example:** `[Measure A]` (a distinct-count measure) — proportionate branch uses
+  `SUMMARIZE` over `'Table A'` grouped by `[Column A]` and `[_WeightPct]`,
+  then sums the weight. Non-proportionate branch uses `SUMX(VALUES(...), 1)` instead of
   DISTINCTCOUNT, with the same CROSSFILTER/USERELATIONSHIP modifiers. Both branches
-  outperformed the equivalent DISTINCTCOUNT + Properties-iteration version.
+  outperformed the equivalent DISTINCTCOUNT + `'Table B'`-iteration version.
 - **Always verify:** Even when the delta appears marginal in one filter context, test under
   proportionate / multi-property / year-filtered contexts — the gap can be dramatically larger.
 - **Validated:** 2026-04-11
-- **Affected model:** Maintenance & Construction (pattern is model-agnostic)
+- **Affected model:** All (pattern is model-agnostic)
 
 ## FILTER → KEEPFILTERS substitution for predicate pushdown
 - **When to use:** Any measure using `FILTER('Table', predicate)` as a CALCULATE argument
@@ -151,7 +151,7 @@
   (unlike bare predicates in CALCULATE). This is usually desirable — report slicers remain
   additive. If you need to override external context, use a bare predicate without KEEPFILTERS.
 - **Validated:** 2026-04-11
-- **Affected model:** Maintenance & Construction (pattern is model-agnostic)
+- **Affected model:** All (pattern is model-agnostic)
 
 ## AVERAGEX → DIVIDE with single-pass ADDCOLUMNS
 - **When to use:** Any measure using `AVERAGEX(VALUES(key), [complex measure])` where
@@ -183,67 +183,66 @@
   could add FE memory pressure — test with traces. For small-to-moderate key counts it's
   a net win.
 - **Caveat — proportionate measures:** When the measure applies per-row weighting (e.g.,
-  ownership pct varies per property per WO), AVERAGEX must stay — the per-row context
+  the weight varies per entity per row), AVERAGEX must stay — the per-row context
   is mathematically required. However, hoisting shared relationship modifiers
   (CROSSFILTER/USERELATIONSHIP) into an outer CALCULATE still helps by avoiding
   per-iteration relationship setup.
-- **Example (M&C):** `Avg Cost per Open Work Order` — non-proportionate branch uses
+- **Example:** `[Measure A]` (a per-key average cost) — non-proportionate branch uses
   ADDCOLUMNS + DIVIDE; proportionate branch stays as AVERAGEX with hoisted outer CALCULATE.
 - **Validated:** 2026-04-11
-- **Affected model:** Maintenance & Construction (pattern is model-agnostic)
+- **Affected model:** All (pattern is model-agnostic)
 
-## Proportionate rent over daily-snapshot Occupancy — grain-dependent branching
-- **When to use:** Occupancy proportionate average-rent measures that must branch
-  between single-property and multi-property contexts. The `Occupancy` table is a
-  **daily snapshot**, so a single property has many rows over time (one per day)
-  even when ownership pct is stable, and rent amount can change across snapshot
-  days.
+## Proportionate metric over a daily-snapshot fact table — grain-dependent branching
+- **When to use:** Proportionate weighted-average measures over a daily-snapshot fact
+  table that must branch between single-entity and multi-entity contexts. In a
+  **daily snapshot**, a single entity has many rows over time (one per day) even
+  when the weight (e.g., an ownership pct) is stable, and the measured value can
+  change across snapshot days.
 - **Pattern:**
   ```dax
-  // Single-property grain — AVERAGEX of rent × pct
-  // Rationale: ownership pct is constant across the property's snapshot rows, so
-  // AVERAGEX(rows, rent*pct) naturally averages rent across snapshot days and
-  // the constant pct just scales the result. No extra denominator weighting needed.
-  VAR ProportionateProperty =
+  // Single-entity grain — AVERAGEX of value × weight
+  // Rationale: the weight is constant across the entity's snapshot rows, so
+  // AVERAGEX(rows, value*weight) naturally averages the value across snapshot days
+  // and the constant weight just scales the result. No extra denominator weighting needed.
+  VAR ProportionateEntity =
       AVERAGEX (
           RelevantRows,
-          'Occupancy'[Resident Curr Rent Amt] * 'Occupancy'[Ownership Percentage]
+          'Table A'[Column A] * 'Table A'[Column B]
       )
 
-  // Multi-property grain — SUMPRODUCT-style weighted average
-  // Rationale: pct varies across properties, so both numerator and denominator
-  // must be pct-weighted to produce a correct proportionate average rent.
+  // Multi-entity grain — SUMPRODUCT-style weighted average
+  // Rationale: the weight varies across entities, so both numerator and denominator
+  // must be weight-scaled to produce a correct proportionate average.
   VAR ProportionateAggregate =
       DIVIDE (
-          SUMX ( RelevantRows, 'Occupancy'[Resident Curr Rent Amt] * 'Occupancy'[Ownership Percentage] ),
-          SUMX ( RelevantRows, 'Occupancy'[Ownership Percentage] )
+          SUMX ( RelevantRows, 'Table A'[Column A] * 'Table A'[Column B] ),
+          SUMX ( RelevantRows, 'Table A'[Column B] )
       )
 
   // Branch selection
   RETURN
       IF (
-          HASONEVALUE ( 'Occupancy'[Property Key] ),
-          ProportionateProperty,
+          HASONEVALUE ( 'Table A'[Key] ),
+          ProportionateEntity,
           ProportionateAggregate
       )
   ```
 - **Key insight:** The two branches are *not* mathematically equivalent — this is
-  intentional. At single-property grain, pct is constant, so AVERAGEX returns
-  `pct × AVG(rent)` which is the proportionate average rent over snapshot days.
-  Applying the SUMPRODUCT form at single-property grain would collapse to plain
-  `AVG(rent)` (pct cancels), losing the proportionate scaling. Conversely, using
-  AVERAGEX at multi-property grain would produce an unweighted mean of rent×pct
-  products — wrong when pct varies.
-- **Why snapshot grain matters:** This pattern is specifically validated against
-  the daily-snapshot structure of `Occupancy` in the Occupancy model. It may
-  generalize to other snapshot fact tables, but each candidate should be
-  confirmed individually — the correctness hinges on (a) pct being constant per
-  entity across snapshot rows at the single-entity grain, and (b) the measured
-  value (rent) varying meaningfully across snapshot days.
+  intentional. At single-entity grain, the weight is constant, so AVERAGEX returns
+  `weight × AVG(value)` which is the proportionate average over snapshot days.
+  Applying the SUMPRODUCT form at single-entity grain would collapse to plain
+  `AVG(value)` (the weight cancels), losing the proportionate scaling. Conversely, using
+  AVERAGEX at multi-entity grain would produce an unweighted mean of value×weight
+  products — wrong when the weight varies.
+- **Why snapshot grain matters:** This pattern is validated against a daily-snapshot
+  fact table. It may generalize to other snapshot fact tables, but each candidate
+  should be confirmed individually — the correctness hinges on (a) the weight being
+  constant per entity across snapshot rows at the single-entity grain, and (b) the
+  measured value varying meaningfully across snapshot days.
 - **Validated:** 2026-04-22
-- **Affected model:** Occupancy (Avg Gross In-Place Rent JS and similar
-  proportionate-rent measures). Do not apply blindly to other models'
-  snapshot/proportionate measures without confirming the grain assumptions.
+- **Affected model:** Validated on a daily-snapshot fact table. Do not apply blindly
+  to other models' snapshot/proportionate measures without confirming the grain
+  assumptions.
 
 ## Consolidate shared filters across combined CALCULATE blocks
 - **When to use:** Any measure that sums or combines multiple CALCULATE blocks sharing
@@ -264,36 +263,36 @@
 - **Benefits:** Reduces code duplication, simplifies maintenance (shared filter changes
   happen in one place), and gives the engine a simpler query plan.
 - **Watch for:** Accidental table mismatches in duplicated filters — e.g., the same
-  logical filter targeting `'Open Work Orders'` in one block and `'Work Orders'`
+  logical filter targeting `'Table A'` in one block and `'Table B'`
   in another when they should match.
-- **Example:** NOI Report measure went from 14 KEEPFILTERS across 2 blocks (5 duplicated)
+- **Example:** A reporting measure went from 14 KEEPFILTERS across 2 blocks (5 duplicated)
   down to 8 — 6 shared in outer CALCULATE, 1 unique per inner block.
 - **Validated:** 2026-03-25
-- **Affected model:** Maintenance & Construction
+- **Affected model:** All
 
 ## Eliminate redundant filters across the measure dependency chain
 - **When to use:** Any time you review or refactor a measure that wraps another measure
   in CALCULATE. Requires walking the dependency chain (ideally from a parsed .bim) to
   inspect what filters the base measure already applies.
 - **Pattern:** If a base measure already applies a filter (e.g.,
-  `KEEPFILTERS('Work Orders'[Is Internal] = "Y")`), any dependent measure that wraps it
+  `KEEPFILTERS('Table A'[Column A] = "Value 1")`), any dependent measure that wraps it
   in CALCULATE does NOT need to repeat that same filter — it's already enforced by the
   inner measure and the outer KEEPFILTERS just adds evaluation cost for no effect.
   ```dax
-  // Base measure already filters [Is Internal] = "Y"
+  // Base measure already filters [Column A] = "Value 1"
   // ❌ Redundant — filter is duplicated
   Dependent Measure =
   CALCULATE(
       [Base Measure],
-      KEEPFILTERS( 'Work Orders'[Is Internal] = "Y" ),  // already in base
-      KEEPFILTERS( 'Work Orders'[Status] IN { "Complete" } )
+      KEEPFILTERS( 'Table A'[Column A] = "Value 1" ),  // already in base
+      KEEPFILTERS( 'Table A'[Column B] IN { "Value 2" } )
   )
 
   // ✅ Correct — only the additive filter remains
   Dependent Measure =
   CALCULATE(
       [Base Measure],
-      KEEPFILTERS( 'Work Orders'[Status] IN { "Complete" } )
+      KEEPFILTERS( 'Table A'[Column B] IN { "Value 2" } )
   )
   ```
 - **Key insight:** KEEPFILTERS intersects with existing filter context. If the base measure
@@ -307,4 +306,4 @@
   DAX → list its filters → compare against the outer CALCULATE's filters → remove exact
   duplicates.
 - **Validated:** 2026-03-25
-- **Affected model:** Maintenance & Construction
+- **Affected model:** All

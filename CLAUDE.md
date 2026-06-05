@@ -22,9 +22,8 @@ You maintain a behavioral knowledge base (KB) of the user's models — performan
   confluence-cache/references/                  # Setup, manifest schema, troubleshooting
 knowledge/                                      # Curated KB (gotchas, patterns, performance, standards) — flat, small files
   knowledge-index.md                            # Routing manifest: access pattern per file
-  confluence/                                   # Cached Confluence pages (managed by confluence-cache skill)
-    _manifest.yaml                              # Source of truth for cached pages
-  _archive/                                     # Deprecated KB files (retained for history)
+  confluence/                                   # Cached Confluence pages (OPTIONAL — managed by confluence-cache skill)
+    _manifest.yaml                              # Source of truth for cached pages (empty template by default)
 artifacts/                                      # Generated files (model-schema dumps, reports)
   model-schema/                                 # Parsed `.bim` markdown dumps (Context Mode index targets)
 scripts/                                        # Runnable automation (Python, C# .csx)
@@ -83,13 +82,11 @@ Start every Power BI task at `knowledge/knowledge-index.md` to identify the rele
 
 | Question type | File / source |
 |---|---|
-| Known gotchas for a table/relationship (M&C) | `knowledge/mc-gotchas.md` (direct-read) |
-| Prior performance findings (M&C) | `knowledge/mc-dax-performance.md` (direct-read) |
+| Per-model gotchas, performance findings, design decisions | `knowledge/{model}-gotchas.md`, `knowledge/{model}-dax-performance.md`, `knowledge/{model}-design-decisions.md` (direct-read — created on demand when a model is onboarded; none ship by default) |
 | Validated DAX patterns (transferable) | `knowledge/pbi-dax-patterns.md` (direct-read) |
 | Team modeling standards (team-wide, local KB) | `knowledge/pbi-modeling-standards.md` (direct-read) |
-| Team standards published in Confluence (cached) | `knowledge/confluence/` (Context Mode index/search). For pages NOT yet cached, use the live Atlassian MCP. To add or refresh, invoke the `confluence-cache` skill. |
-| Model inventory and structure (M&C snapshot) | `artifacts/model-schema/model-schema-mc.md` (Context Mode index/search — do not full-read) |
-| Design decision rationale (M&C) | `knowledge/mc-design-decisions.md` (direct-read) |
+| Team standards published in Confluence (cached) — **optional** | `knowledge/confluence/` (Context Mode index/search). Off by default; configure via the `confluence-cache` skill to enable. For pages NOT cached, use the live Atlassian MCP. |
+| Model inventory and structure (per-model snapshot) | `artifacts/model-schema/model-schema-<model>.md` (Context Mode index/search — do not full-read) |
 | Topology refactor orchestration (post `/dax` Tier 3, or relationship-debt cleanup) | `.claude/skills/refactor-strategy/SKILL.md` |
 | Regression testing procedures | `.claude/skills/regression-testing/SKILL.md` |
 | Measure benchmarking | `.claude/skills/measure-benchmarking/SKILL.md` |
@@ -97,7 +94,7 @@ Start every Power BI task at `knowledge/knowledge-index.md` to identify the rele
 | Confluence page caching (grab/refresh/list/remove) | `.claude/skills/confluence-cache/SKILL.md` |
 | Context Mode routing | `.claude/skills/powerbi-context-mode/SKILL.md` |
 
-Use the retrieved context to give model-specific advice rather than generic guidance — e.g., if you know DimCalendar uses inactive relationships, suggest `CALCULATE` with the specific `USERELATIONSHIP` rather than a bare `CALCULATE`. For schema-derived facts, prefer live TE CLI / TOM when available; otherwise use the snapshot at `artifacts/model-schema/` and flag staleness in your answer.
+Use the retrieved context to give model-specific advice rather than generic guidance — e.g., if you know the `Date` table uses inactive relationships, suggest `CALCULATE` with the specific `USERELATIONSHIP` rather than a bare `CALCULATE`. For schema-derived facts, prefer live TE CLI / TOM when available; otherwise use the snapshot at `artifacts/model-schema/` and flag staleness in your answer.
 
 ### 2. Defer to data-goblin plugin skills for plugin-domain work
 
@@ -107,8 +104,8 @@ For DAX, C# scripting / TOM, TMDL, BPA, TE CLI, live TOM, PBIR / theme, Fabric C
 
 Combine behavioral knowledge + structural context for precise, model-specific guidance. Examples:
 
-- If `mc-gotchas.md` says AccountingPeriod is TEXT → warn about implicit cast failures before the user hits them
-- If `mc-dax-performance.md` says the bridge bidir scan was eliminated by the March 2026 refactor → don't suggest the old CROSSFILTER workaround
+- If `{model}-gotchas.md` says a key column is TEXT → warn about implicit cast failures before the user hits them
+- If `{model}-dax-performance.md` says a bridge bidir scan was eliminated by a prior refactor → don't suggest the old CROSSFILTER workaround
 - If `pbi-dax-patterns.md` has a validated row/total branching pattern → use it instead of guessing
 - If `pbi-modeling-standards.md` specifies naming conventions → apply them when creating measures
 
@@ -116,7 +113,7 @@ Combine behavioral knowledge + structural context for precise, model-specific gu
 
 If something in the conversation contradicts the KB, surface it immediately:
 
-> **Conflict detected:** The KB records `DimCalendar[AccountingPeriod]` as TEXT type, but your DAX is successfully joining it as DATE. Did something change? Should I update the KB?
+> **Conflict detected:** The KB records `'Date'[Period]` as TEXT type, but your DAX is successfully joining it as DATE. Did something change? Should I update the KB?
 
 Never silently work from stale knowledge.
 
@@ -231,7 +228,7 @@ Generated schema markdown is a documentation/cache snapshot — do NOT read it w
 
 ## Multi-Model Awareness
 
-The user works across multiple Power BI semantic models (Maintenance & Construction, Occupancy, Leasing, Accounting, etc.). Always tag findings to the correct model.
+The user may work across multiple Power BI semantic models. Always tag findings to the correct model — per-model behavioral KB files follow the `{model}-gotchas.md` / `{model}-dax-performance.md` / `{model}-design-decisions.md` naming pattern and are created on demand when a model is onboarded. None ship by default; the shipped generic KB is `pbi-dax-patterns.md` + `pbi-modeling-standards.md`.
 
 ---
 

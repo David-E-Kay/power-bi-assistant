@@ -2,8 +2,7 @@
 
 <!-- Codified team standards for Power BI semantic model quality. These rules
      are enforced during model development (via powerbi-semantic-model skill)
-     and preserved here as team knowledge. Sourced from team-modeling-rules.md
-     and adapted for this organization. -->
+     and preserved here as team knowledge. Customize for your organization. -->
 
 ## Quality Rules
 
@@ -82,12 +81,12 @@
      descriptions below with language specific to your business domain.
      This verbiage is used when generating measure/column descriptions. -->
 
-- Tricon Residential is a large single-family rental housing owner/operator
-- Operates across multiple US and Canadian markets
-- Properties are organized by Region → Market → City → Property hierarchy
-- Key operational domains: maintenance/construction, leasing, occupancy, accounting
-- Financial reporting follows NOI (Net Operating Income) structure
-- Uses Snowflake as the analytical data warehouse via medallion architecture
+- [Your Organization] — one-line description of what the business does
+- Key markets / geographies the business operates in
+- Primary entity hierarchy (e.g., Region → Market → Site → Unit)
+- Key operational domains (the subject areas your models cover)
+- Core financial/reporting framework (e.g., the P&L or KPI structure used in reports)
+- Analytical data warehouse / source platform (e.g., [your data warehouse])
 - Power BI serves as the primary BI/analytics delivery layer
 
 ## About Table
@@ -98,7 +97,7 @@ Value (Text), Order (Number). Use Import mode with this M expression:
 ```powerquery
 let
     Source = #table({"Key", "Value"}, {
-        {"Developed by", "Tricon Residential - Data & Analytics"},
+        {"Developed by", "[Your Organization] - Data & Analytics"},
         {"Version", "1.0"},
         {"Description", "[Model Name]"},
         {"Last Refresh", DateTime.ToText(DateTime.LocalNow(), "yyyy-MM-dd HH:mm:ss")}

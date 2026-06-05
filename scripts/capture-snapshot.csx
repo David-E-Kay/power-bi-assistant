@@ -30,7 +30,7 @@
 //           Environment variables override the hardcoded defaults below.
 //           Set any combination before invoking the TE CLI:
 //             SNAPSHOT_LABEL        → snapshotLabel       (e.g. "baseline", "refactored")
-//             MODEL_NAME            → modelName            (e.g. "Occupancy")
+//             MODEL_NAME            → modelName            (e.g. "Sales")
 //             DIAGNOSTIC_MODE       → diagnosticMode       ("true" / "false")
 //             OUTPUT_DIR            → outputDir            (full path)
 //             TEAMS_WEBHOOK_URL     → teamsWebhookUrl      (full URL)
@@ -43,7 +43,7 @@
 //                                    skips port discovery — use for XMLA or non-standard installs)
 //           Example:
 //             set SNAPSHOT_LABEL=baseline
-//             set MODEL_NAME=Occupancy
+//             set MODEL_NAME=Sales
 //             TabularEditor.exe model.bim -S capture-snapshot.csx
 //
 // ROLLBACK: Read-only — no model changes made
@@ -76,12 +76,12 @@ var diagnosticMode = _envDiag != null
 // Each entry must be a valid DAX boolean filter expression for KEEPFILTERS().
 //
 // Examples:
-//   "'Calendar'[Start of Year] = DATE(2025, 1, 1)"
-//   "'Properties'[Property Current Same Home Reporting] = \"Y\""
+//   "'Date'[Start of Year] = DATE(2025, 1, 1)"
+//   "'Table A'[Column A] = \"Value 1\""
 //
 var globalFilters = new List<string>
 {
-    // "'Calendar'[Start of Year] = DATE(2025, 1, 1)",
+    // "'Date'[Start of Year] = DATE(2025, 1, 1)",
 };
 
 // ── Row Cap ─────────────────────────────────────────────────────────────────
@@ -92,7 +92,7 @@ var globalFilters = new List<string>
 // For regression testing, 3–5 rows per context is typically sufficient to
 // validate filter propagation and calculation correctness without evaluating
 // every distinct dimension value. Reduces capture time significantly on
-// high-cardinality dimensions like Vendor Name.
+// high-cardinality dimensions like a name/ID column.
 //
 var maxRowsPerContext = 0;   // 0 = no limit; e.g. 5 = cap at 5 rows per test
 
@@ -542,12 +542,12 @@ var groupByColumns = new Dictionary<string, string>
     // ── Replaced per session by the regression-testing skill ──
     // Single-dimension entries: one DAX column reference per context label.
     { "by_dim1",   "'YourDimTable'[YourSlicerColumn]" },
-    { "by_year",   "'Calendar'[YourYearColumn]" },
+    { "by_year",   "'Date'[Year]" },
     { "by_status", "'YourStatusTable'[YourStatusColumn]" },
 
     // Cross-product entries: pipe-separated, FIRST column = TOPN partition.
     // Place the lower-cardinality column first (see skill Section 2.1).
-    { "by_dim1_x_year", "'YourDimTable'[YourSlicerColumn]|'Calendar'[YourYearColumn]" },
+    { "by_dim1_x_year", "'YourDimTable'[YourSlicerColumn]|'Date'[Year]" },
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -566,7 +566,7 @@ var groupByColumns = new Dictionary<string, string>
 //                            Ensures top N detail rows per partition, not top N overall.
 //
 // Cross-product convention:
-//   groupByColumns entry:  { "by_same_home_x_year", "'Properties'[...] | 'Calendar'[...]" }
+//   groupByColumns entry:  { "by_flag_x_year", "'Table A'[Column A] | 'Date'[...]" }
 //   The "|" is the delimiter. First column = partition for TOPN-per-group.
 //   Place the lower-cardinality column first.
 // ═══════════════════════════════════════════════════════════════════════════════

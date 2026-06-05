@@ -61,7 +61,7 @@ User says: "cache the [page]", "add [URL] to KB", "pull this page into knowledge
 
 Accept any of:
 
-- **Full URL** (`https://triconah.atlassian.net/wiki/spaces/DATA/pages/123456789/Page+Title`) → extract page id from the `/pages/{id}/` segment.
+- **Full URL** (`https://<your-org>.atlassian.net/wiki/spaces/TEAM/pages/123456789/Page+Title`) → extract page id from the `/pages/{id}/` segment.
 - **Tiny URL** (`/wiki/x/Fc1bBw`) → pass the encoded segment to `getConfluencePage` as `pageId`; the MCP accepts tiny IDs.
 - **Numeric page ID** alone → use as-is.
 - **Title only** (e.g., "Power BI Modeling Standards") → resolve via `searchConfluenceUsingCql`:

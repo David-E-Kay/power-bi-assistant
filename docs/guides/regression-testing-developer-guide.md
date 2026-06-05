@@ -90,7 +90,7 @@ The comparison is value-by-value. Same query, same filter context, same measure 
 
 ### Model-agnostic toolkit, model-specific config
 
-This project supports multiple semantic models — Maintenance & Construction (M&C), Occupancy, Leasing, Accounting, etc. Each has different tables, measures, and dimensions. But the regression toolchain is the same for all of them:
+This project supports multiple semantic models, each with different tables, measures, and dimensions. But the regression toolchain is the same for all of them:
 
 - **Stable across models:** the capture script's DAX construction logic, the comparator, the report format.
 - **Per-model:** the test case list (which measures × which contexts) and the dimension column references (which `'Table'[Column]` paths are valid in this model).
@@ -232,7 +232,7 @@ These are the choices you'll face during planning. Defaults work for most cases;
 | **`maxRowsPerContext` (TOPN)** | 0 (all rows) for final pre-deployment validation | 3–5 rows during iterative development for speed |
 | **`globalFilters`** | Empty (test the full model) | Pin to a year/property when investigating a specific subset or for faster dev iteration |
 | **Calc-group testing** | Test base measures only | Test with each calc item (YTD, MTD, PY) when the change touches a calculation group |
-| **Cross-product cardinality cap** | Max 3 dimensions | Never combine high-cardinality dimensions (Vendor, Property) — they explode the test count |
+| **Cross-product cardinality cap** | Max 3 dimensions | Never combine high-cardinality dimensions (individual name/ID columns) — they explode the test count |
 
 > **Where Claude fits:** Phases 1 and 2 are conversational with Claude — see `.claude/skills/regression-testing/SKILL.md` for the full questioning protocol. Phases 3–5 are mechanical: the developer runs scripts and reads the report.
 
@@ -266,7 +266,7 @@ There are two equally-supported ways to run the capture script. Both produce ide
 
 ```bash
 # One-time setup — point env at desired output folder (overrides Desktop default)
-set OUTPUT_DIR=C:\Users\dkay\Desktop\PBI-Regression
+set OUTPUT_DIR=C:\path\to\PBI-Regression
 set MODEL_NAME=Your Model Name
 
 # Baseline capture against the original model
@@ -345,8 +345,8 @@ EVALUATE
 TOPN(
     5,
     SUMMARIZECOLUMNS(
-        'Calendar'[Start of Month],
-        "Result", CALCULATE([Avg Open WO Age DK], KEEPFILTERS('Calendar'[Year] = 2025))
+        'Date'[Start of Month],
+        "Result", CALCULATE([Measure A], KEEPFILTERS('Date'[Year] = 2025))
     )
 )
 ```
@@ -467,7 +467,7 @@ Open `regression-report.xlsx` in Excel:
 
 If everything is expected (e.g., the BLANK → 0 changes match the refactor's intent), document it. Otherwise, fix the DAX or relationship and loop back to Step 5.
 
-**End-to-end at TOPN=5: about 12–15 minutes total** for the M&C model. Full validation at TOPN=0 takes longer (depends on model size) and runs before deployment.
+**End-to-end at TOPN=5: about 12–15 minutes total** for a typical model. Full validation at TOPN=0 takes longer (depends on model size) and runs before deployment.
 
 ---
 

@@ -21,10 +21,10 @@ pages: []                    # List of cached page entries (see below)
 ```yaml
 pages:
   - id: "123456789"                                       # Confluence page ID, quoted (string, not int — IDs can exceed JS safe-int)
-    space_key: "DATA"
+    space_key: "TEAM"
     slug: "power-bi-modeling-standards"                   # Filename without .md extension
     title: "Power BI Modeling Standards"                  # Human title at last sync
-    url: "https://triconah.atlassian.net/wiki/spaces/DATA/pages/123456789/Power+BI+Modeling+Standards"
+    url: "https://<your-org>.atlassian.net/wiki/spaces/TEAM/pages/123456789/Power+BI+Modeling+Standards"
     last_modified: "Apr 10, 2026"                         # lastModified date string from getConfluencePage; drives re-fetch decisions
     last_synced: "2026-05-08T10:32:00Z"                   # ISO-8601 UTC of the cache write, quoted
 ```
@@ -69,7 +69,7 @@ The slug becomes the filename: `knowledge/confluence/<slug>.md`. Rules in order:
    - `"DAX: Naming & Conventions (v2)"` → `dax-naming-conventions-v2`
 3. **Strip leading/trailing dashes.**
 4. **Truncate to 60 characters at a word boundary.**
-   - `"Tabular Editor Scripting Patterns for Maintenance and Construction Models"` (74 chars) → `tabular-editor-scripting-patterns-for-maintenance-and` (53 chars, cut at `-and`)
+   - `"Tabular Editor Scripting Patterns and Conventions for Semantic Models"` (69 chars) → `tabular-editor-scripting-patterns-and-conventions-for` (53 chars, cut at `-for`)
 5. **On collision** with an existing slug in the cache: append `-<last-6-of-id>`.
    - `"Modeling Standards"` (id `123456789`) → `modeling-standards`
    - Second `"Modeling Standards"` (id `987654321`) → `modeling-standards-654321`

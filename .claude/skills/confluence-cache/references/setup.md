@@ -25,16 +25,16 @@ If the list is empty:
 
 If the list is present but every call returns 401/403, the OAuth handshake hasn't run. Trigger it by asking any Atlassian question (e.g., "search Confluence for `foo`") — a browser window opens for sign-in. Approve the requested scopes. Subsequent calls run silently.
 
-## Step 2 — Verify the manifest exists
+## Step 2 — Configure the manifest (the opt-in step)
 
-The repo ships with `knowledge/confluence/_manifest.yaml` already populated with the site block (cloud_id + URL + primary space). Open it and check:
+The repo ships with `knowledge/confluence/_manifest.yaml` as an **empty template** — `site.cloud_id: null` and `pages: []`. Confluence caching stays OFF until you fill in the site block; this is the one-time opt-in. Open it and set:
 
-- `site.cloud_id` is your Atlassian cloud UUID (or your `<site>.atlassian.net` URL — both work for MCP calls).
-- `site.url` matches your Confluence base URL.
-- `site.primary_space.key` matches the team space you most often cache from.
-- `pages: []` is empty on first install.
+- `site.cloud_id` to your Atlassian cloud UUID (or your `<your-org>.atlassian.net` URL — both work for MCP calls).
+- `site.url` to your Confluence base URL.
+- `site.primary_space.key` to the team space you most often cache from (optional).
+- Leave `pages: []` empty — pages are added when you cache them (Step 3).
 
-If `site.cloud_id` is missing or wrong, ask Claude:
+If you'd rather not configure the cloud_id by hand, ask Claude:
 
 > "Get the accessible Atlassian resources and update the manifest cloud_id."
 

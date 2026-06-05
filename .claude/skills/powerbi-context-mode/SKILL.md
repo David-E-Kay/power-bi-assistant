@@ -31,7 +31,7 @@ When any of those data-goblin skills activates, follow ITS workflow. This skill 
 
 - Retrieval over `artifacts/model-schema/*.md` (parsed `.bim` snapshots — large, project-specific)
 - One-shot analysis of large diagnostic outputs in `output/` (BPA results, VertiPaq exports, DAX Studio Server Timings exports, query plans, regression-diff JSON)
-- Retrieval over `knowledge/confluence/*.md` (cached team-standards pages — managed by the `confluence-cache` skill; this skill only handles the search side)
+- Retrieval over `knowledge/confluence/*.md` (cached team-standards pages — present only if the **optional** Confluence cache is configured; the `confluence-cache` skill owns writes, this skill only handles the search side)
 - Multi-file searches across `knowledge/` only when needed
 
 ## Source-of-Truth Detection
@@ -70,7 +70,7 @@ Look for connector names containing `power-bi`, `pbi`, or `analysis-services`. I
 
 When delivering metadata-dependent analysis, prefix the response with the source:
 
-> **Source: parsed `.bim` snapshot** (`artifacts/model-schema/model-schema-mc.md`, generated 2026-04-13) — note: live model may have diverged.
+> **Source: parsed `.bim` snapshot** (`artifacts/model-schema/model-schema-sales.md`, generated 2026-04-13) — note: live model may have diverged.
 
 ## Use Context Mode For
 
@@ -102,7 +102,7 @@ If >500 lines or >50 KB, route through Context Mode. `ctx_index` is idempotent �
 
 **Do not** call `ctx_index(content: <large_data>)`. Always pass `path:` so the file is read server-side rather than through context.
 
-Use stable, descriptive source names: `model-schema-mc`, `bpa-2026-04`, `vertipaq-mc-2026-04`. Don't reuse the same name for different content.
+Use stable, descriptive source names: `model-schema-sales`, `bpa-2026-04`, `vertipaq-sales-2026-04`. Don't reuse the same name for different content.
 
 ## Explicitly NOT Scoped
 

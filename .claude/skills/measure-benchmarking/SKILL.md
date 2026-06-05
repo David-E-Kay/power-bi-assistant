@@ -14,13 +14,13 @@ Trigger when:
 - The user asks to profile or benchmark a set of measures
 - The user wants timing data across multiple dimensions without manually running queries in DAX Studio
 - The user asks "which measures should I optimize first" or "what's the ROI of optimizing X"
-- The user wants to compare measure timing across different filter contexts (e.g., "how does this measure perform sliced by Market vs by Vendor")
+- The user wants to compare measure timing across different filter contexts (e.g., "how does this measure perform sliced by [Column A] vs by [Column B]")
 
 Do NOT use for:
 - Pre/post comparison of a specific change (use `skill-regression-testing.md` — it captures both values and timing)
 - Deep query plan analysis of a single measure (use DAX Studio Server Timings directly)
 - Report-level visual performance (this skill tests the semantic model layer via EvaluateDax, not visual rendering)
-- General DAX debugging or optimization (use `pbi-dax-patterns.md` or `mc-dax-performance.md`)
+- General DAX debugging or optimization (use `pbi-dax-patterns.md` or `{model}-dax-performance.md`)
 
 ### Relationship to Regression Testing
 
@@ -35,7 +35,7 @@ Do NOT use for:
 
 ## Core Principles
 
-1. **The user drives measure selection.** Claude proposes lists based on semantic search of the .bim or model knowledge, but the user confirms before any script is generated. The user may describe measures by domain ("all project cost measures"), by exclusion ("skip budget and time intelligence"), or by explicit list.
+1. **The user drives measure selection.** Claude proposes lists based on semantic search of the .bim or model knowledge, but the user confirms before any script is generated. The user may describe measures by domain ("all [Domain A] cost measures"), by exclusion ("skip budget and time intelligence"), or by explicit list.
 2. **Use the tested template.** The benchmark script at `scripts/benchmark-measures.csx` is a proven, working template (read-only — copy to `output/{label}.csx` per session). Claude MUST use it as the base and only populate the configuration sections. All other code — helpers, execution engine, TREATAS construction, TOPN logic, error handling, diagnostic mode, Teams webhook, summary report with Top 10 Slowest — is copied verbatim from the template. Do NOT regenerate these sections from scratch.
 3. **Mirror real report behavior.** DAX queries are constructed to match how Power BI visual queries work: SUMMARIZECOLUMNS with filter arguments, TREATAS for slicer simulation, bare measure references (no `IGNORE` — removed in v3 because it inflated blank-row counts). This ensures timing reflects what end users actually experience.
 4. **Single run per test case.** TE3 scripting cannot clear the AS engine cache between queries. Multiple runs would measure warm-cache performance after the first query, skewing results. A single pass gives the most honest mixed-cache timing, representative of typical report usage.
@@ -47,7 +47,7 @@ Do NOT use for:
 ### 1.1 Establish the Model Context
 
 Check what Claude already knows:
-- Search `pbi-models.md` for the model name and structure
+- Check the model's KB notes (`{model}-*.md`) and any `artifacts/model-schema/` snapshot for the model name and structure
 - Check memory edits for known performance findings or measure architecture notes
 - If a `.bim` file is available (uploaded or previously parsed), use it for structural truth and measure inventory
 
@@ -65,11 +65,11 @@ The user describes which measures to include using one or more of these approach
 The user describes categories of measures in natural language. Claude searches the .bim (or parsed measure inventory from model knowledge) to build a proposed list.
 
 Example user input:
-> "All measures for Homes Serviced, Work Order Costs and Counts, and Project Cost and Counts, excluding all budget measures and all time intelligence variations"
+> "All measures for [Domain A], [Domain B] costs and counts, and [Domain C] counts, excluding all budget measures and all time intelligence variations"
 
 Claude's process:
-1. Parse the .bim to extract all measure names (or search `pbi-models.md` / memory for the known measure inventory)
-2. Apply inclusion filters — match measure names containing keywords from the user's domain descriptions (e.g., "Homes Serviced", "Work Order Cost", "Work Order Count", "Project Cost", "Project Count")
+1. Parse the .bim to extract all measure names (or search the model's KB notes / memory for the known measure inventory)
+2. Apply inclusion filters — match measure names containing keywords from the user's domain descriptions (e.g., "[Domain A]", "[Domain B] Cost", "[Domain B] Count", "[Domain C] Count")
 3. Apply exclusion filters — remove measures matching exclusion patterns (e.g., names containing "Budget", "Prior Year", "(ly)", "(ytd)", "(mtd)", "MoM", "YoY", "vs PY", or other time intelligence suffixes from `pbi-modeling-standards.md`)
 4. Present the proposed list for confirmation
 
@@ -80,7 +80,7 @@ The user pastes a list of measure names directly. Claude validates each name exi
 **Approach C — Hybrid:**
 
 The user provides a domain description plus explicit additions or removals:
-> "All project measures, plus 'Avg Open Work Orders Age' and 'Open Work Orders Count', but skip anything with 'DK' in the name"
+> "All [Domain A] measures, plus '[Measure A]' and '[Measure B]', but skip anything with 'DK' in the name"
 
 ### 1.3 Present Proposed Measure List for Confirmation
 
@@ -89,28 +89,28 @@ Always present the final list before generating the script. Format as a numbered
 ```
 Proposed Benchmark Measures (23 measures):
 
-Work Order Costs & Counts:
-  1. Work Order Costs by Completed Date
-  2. Work Order Costs by Created Date
-  3. Work Order Count by Completed Date
+[Domain B] Costs & Counts:
+  1. [Measure B] by [Date Role 1]
+  2. [Measure B] by [Date Role 2]
+  3. [Measure C] by [Date Role 1]
   ...
 
-Project Costs & Counts:
-  7. Project Cost by Completed Date (Base)
-  8. Project Cost by Created Date
-  9. Project Count by Completed Date Base
+[Domain A] Costs & Counts:
+  7. [Measure D] (Base)
+  8. [Measure E] by [Date Role 2]
+  9. [Measure F] Base
   ...
 
-Homes Serviced:
-  15. Homes Serviced by Vendor base
-  16. Homes Serviced Internally Work Order Costs by Completed Date
-  17. Homes Serviced Project Cost by Completed Date
+[Domain C]:
+  15. [Measure G] base
+  16. [Measure H] by [Date Role 1]
+  17. [Measure I] by [Date Role 1]
   ...
 
 Excluded (matched exclusion pattern):
-  - Project Cost by Completed Date (ly)     [time intelligence]
-  - Work Order Count Budget                  [budget]
-  - Work Order Costs vs PY                   [time intelligence]
+  - [Measure D] (ly)        [time intelligence]
+  - [Measure C] Budget       [budget]
+  - [Measure B] vs PY        [time intelligence]
 
 Add or remove any before I generate the script?
 ```
@@ -139,13 +139,13 @@ Once the inventory is known, apply **semantic interpretation** — not literal k
 - Budget/planning measures
 - Internal/helper measures (e.g., `_`-prefixed, or another model-specific convention)
 
-*Example for reference (M&C model):*
+*Example for reference:*
 
 | User says | Inclusion | Exclusion |
 |---|---|---|
-| "all project measures" | Measures in the Projects table | — |
-| "work order costs and counts" | Measures measuring WO cost or count aggregations | — |
-| "homes serviced" | Measures tracking properties with active work | — |
+| "all [Domain A] measures" | Measures in the [Domain A] table | — |
+| "[Domain B] costs and counts" | Measures aggregating [Domain B] cost or count | — |
+| "[Domain C]" | Measures tracking [Domain C] activity | — |
 | "skip time intelligence" | — | Names containing "(ly)", "(ytd)", "MoM", "YoY", "vs PY" |
 | "skip DK variants" | — | Names containing " DK" |
 
@@ -165,17 +165,17 @@ Suggest dimensions based on model structure using the best available source:
 
 Always present a proposed list and wait for user confirmation before proceeding. The user may add, remove, or substitute.
 
-*Example for reference (M&C model):*
+*Example for reference:*
 
 ```
 Suggested single-slice dimensions:
-  1. 'Properties'[Property Market]
-  2. 'Proportionate Ownership Toggle'[Proportionate Values]
-  3. 'Calendar'[Calendar Month]        (or [Start of Year] for annual)
-  4. 'Projects'[Project Scope Type Desc]
-  5. 'Work Orders'[Work Order Status Desc]
-  6. 'Vendors'[Vendor Name]
-  7. 'Repair Type'[Repair Type]
+  1. 'Table A'[Column A]
+  2. 'Table B'[Column B]               (e.g., a toggle/flag dimension)
+  3. 'Date'[Month]                     (or 'Date'[Start of Year] for annual)
+  4. 'Table C'[Column C]               (e.g., a category/type column)
+  5. 'Table D'[Column D]               (e.g., a status column)
+  6. 'Table E'[Column E]               (high-cardinality name/ID — optional)
+  7. 'Table F'[Column F]
 ```
 
 ### 2.2 Cross-Product Context
@@ -188,23 +188,23 @@ If yes, ask which columns to include. Then ask which columns should be constrain
 
 Example interaction:
 
-> **User:** "Cross-product with Market, Month, Scope Type, and Proportionate Toggle. Filter Scope Type to just Turn and Proportionate Toggle to Y."
+> **User:** "Cross-product with Column A, Month, Column C, and the toggle. Filter Column C to just Value 1 and the toggle to Value 2."
 >
 > **Claude generates:**
 > ```
 > crossProductColumns:
->   'Properties'[Property Market]
->   'Calendar'[Calendar Month]
->   'Projects'[Project Scope Type Desc]
->   'Proportionate Ownership Toggle'[Proportionate Values]
+>   'Table A'[Column A]
+>   'Date'[Month]
+>   'Table C'[Column C]
+>   'Table B'[Column B]
 >
 > crossProductValueFilters (TREATAS):
->   'Projects'[Project Scope Type Desc] → {"Turn"}
->   'Proportionate Ownership Toggle'[Proportionate Values] → {"Y"}
+>   'Table C'[Column C] → {"Value 1"}
+>   'Table B'[Column B] → {"Value 2"}
 >
 > Unfiltered columns (all values):
->   'Properties'[Property Market]       (~40 values)
->   'Calendar'[Calendar Month]          (~12 values)
+>   'Table A'[Column A]       (~40 values)
+>   'Date'[Month]             (~12 values)
 >
 > Estimated cross-product rows: ~480 (40 × 12 × 1 × 1)
 > ```
@@ -217,13 +217,13 @@ Ask whether any report-level filters should apply to all queries. Ask the user w
 
 These are applied as KEEPFILTERS inside a CALCULATE wrapper around the measure reference, matching how report-level filters work.
 
-*(M&C example: `'Calendar'[Start of Year] = DATE(2025,1,1)` to restrict to current fiscal year, and `'Properties'[Property Current Same Home Reporting] = "Y"` for the standard Same Home filter.)*
+*(Example: `'Date'[Start of Year] = DATE(2025,1,1)` to restrict to a fiscal year, and `'Table A'[Column A] = "Value 1"` for a standard cohort flag.)*
 
 ### 2.4 TOPN Configuration
 
 Ask whether to cap rows per context:
 - **0 (default)** — return all rows. Best for accurate timing since it measures full query cost.
-- **50-100** — useful if high-cardinality dimensions (e.g., Vendor Name with 500+ values) cause timeouts. Applied as TOPN wrapping SUMMARIZECOLUMNS.
+- **50-100** — useful if high-cardinality dimensions (e.g., a name/ID column with 500+ values) cause timeouts. Applied as TOPN wrapping SUMMARIZECOLUMNS.
 
 For benchmarking, `0` is usually correct because the goal is to measure the full query cost that users experience. Only use TOPN if queries are timing out.
 
@@ -384,7 +384,7 @@ Present a prioritized recommendation:
 ```
 Optimization Priority:
 
-1. [12,400ms] [Measure Name] [Market_x_Month_x_Scope_Type]
+1. [12,400ms] [Measure Name] [ColumnA_x_Month_x_ColumnC]
    → High visibility, base measure for N derived measures
    → Known pattern: e.g., nested AVERAGEX with bridge traversal
 
@@ -392,11 +392,11 @@ Optimization Priority:
    → Critical KPI on executive dashboard
    → Previously optimized — may have room for further improvement
 
-3. [6,100ms] [Measure Name] [Market_x_Month_x_Scope_Type]
+3. [6,100ms] [Measure Name] [ColumnA_x_Month_x_ColumnC]
    → Moderate visibility, but base for a measure family
    → Likely cardinality issue with <Dim A> × <Dim B> cross-product
 ```
-*(M&C example: common offenders include Project Avg Days CIP, Avg Open Work Orders Age, and Homes Serviced by Vendor base.)*
+*(Example: common offenders are usually base measures with nested iterators or bridge traversals — e.g., a per-key average over a snapshot table, or a distinct-count over a high-cardinality dimension.)*
 
 ---
 
@@ -483,7 +483,7 @@ At minimum, the user must confirm these before Claude generates the script:
 | Measure selection criteria | Domain keywords + exclusion patterns | "Add X, remove Y, also skip Z" |
 | Proposed measure list | Numbered list grouped by domain | "Looks good" or adjustments |
 | Single-slice dimensions | Common slicer fields from model knowledge | "Use all" or adjustments |
-| Cross-product columns | Suggested based on typical report layout | "Yes, filter Scope to Turn" |
+| Cross-product columns | Suggested based on typical report layout | "Yes, filter Column C to Value 1" |
 | Cross-product value filters | Specific values for constrained columns | Confirm values |
 | Global filters | Common report-level filters | "Add [cohort flag] = Y" or "Restrict to current year" |
 | TOPN | Default 0 (no limit) | "Cap at 100" or keep default |
@@ -493,24 +493,24 @@ At minimum, the user must confirm these before Claude generates the script:
 
 ## Example End-to-End Session
 
-*The following example uses the M&C model. Substitute your own model name, measure domains, and dimension columns.*
+*The following example is generic. Substitute your own model name, measure domains, and dimension columns.*
 
 ```
-User: "I want to benchmark all the project measures and work order cost measures
-       in M&C. Skip budget and time intel. Slice by Market, Month, and Scope Type.
-       Cross-product those same three with Scope Type filtered to Turn only.
+User: "I want to benchmark all the [Domain A] measures and [Domain B] cost measures.
+       Skip budget and time intel. Slice by Column A, Month, and Column C.
+       Cross-product those same three with Column C filtered to Value 1 only.
        Global filter to 2025."
 
 Claude:
   1. Obtains measure inventory from .bim / MCP / user
-  2. Semantically interprets "project measures" and "work order cost measures"
+  2. Semantically interprets "[Domain A] measures" and "[Domain B] cost measures"
      against the inventory, excluding budget and time intelligence variants
   3. Presents proposed list of ~25 measures, grouped by domain, for confirmation
   4. User confirms (or adjusts)
   5. Presents dimension config:
-     - Single-slice: by_market, by_month, by_project_scope
-     - Cross-product: Market × Month × Scope Type, TREATAS Scope = "Turn"
-     - Global: Calendar[Start of Year] = DATE(2025, 1, 1)
+     - Single-slice: by_col_a, by_month, by_col_c
+     - Cross-product: Column A × Month × Column C, TREATAS Column C = "Value 1"
+     - Global: 'Date'[Start of Year] = DATE(2025, 1, 1)
      - TOPN: 0
   6. User confirms
   7. Generates script: 25 measures × (1 + 3 + 1) = 125 test cases

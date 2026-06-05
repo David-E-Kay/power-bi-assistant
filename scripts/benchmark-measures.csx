@@ -111,10 +111,10 @@ var teamsWebhookUrl = System.Environment.GetEnvironmentVariable("TEAMS_WEBHOOK_U
 
 var measures = new List<string>
 {
-    // "Avg Open Work Orders Age",
-    // "Open Work Orders Count",
-    // "Project Cost by Completed Date (Base)",
-    // "Work Order Count by Completed Date",
+    // "[Measure A]",
+    // "[Measure B]",
+    // "[Measure C] (Base)",
+    // "[Measure D]",
 };
 
 
@@ -125,11 +125,11 @@ var measures = new List<string>
 
 var singleSliceDimensions = new Dictionary<string, string>
 {
-    // { "by_market", "'Properties'[Property Market]" },
-    // { "by_prop_toggle", "'Proportionate Ownership Toggle'[Proportionate Values]" },
-    // { "by_month", "'Calendar'[Calendar Month]" },
-    // { "by_project_scope", "'Projects'[Project Scope Type Desc]" },
-    // { "by_wo_priority", "'Work Orders'[Work Order Priority Desc]" },
+    // { "by_col_a", "'Table A'[Column A]" },
+    // { "by_toggle", "'Table B'[Column B]" },
+    // { "by_month", "'Date'[Month]" },
+    // { "by_col_c", "'Table C'[Column C]" },
+    // { "by_col_d", "'Table D'[Column D]" },
 };
 
 
@@ -137,19 +137,19 @@ var singleSliceDimensions = new Dictionary<string, string>
 // All columns listed here go into a SINGLE SUMMARIZECOLUMNS together,
 // producing one combined result set per measure. Leave empty to skip.
 //
-// This mirrors a report matrix visual: e.g., Market on rows, Month on
-// columns, with slicers for Scope Type and Priority.
+// This mirrors a report matrix visual: e.g., Column A on rows, Month on
+// columns, with slicers for Column C and Column D.
 //
 // Use crossProductValueFilters (below) to constrain specific columns to
 // selected values — just like a report slicer.
 
 var crossProductColumns = new List<string>
 {
-    // "'Properties'[Property Market]",
-    // "'Proportionate Ownership Toggle'[Proportionate Values]",
-    // "'Calendar'[Calendar Month]",
-    // "'Projects'[Project Scope Type Desc]",
-    // "'Work Orders'[Work Order Priority Desc]",
+    // "'Table A'[Column A]",
+    // "'Table B'[Column B]",
+    // "'Date'[Month]",
+    // "'Table C'[Column C]",
+    // "'Table D'[Column D]",
 };
 
 
@@ -162,13 +162,13 @@ var crossProductColumns = new List<string>
 // Date/numeric values: use the DAX literal format the column expects.
 //
 // Examples:
-//   { "'Projects'[Project Scope Type Desc]", new List<string> { "Turn", "Renewal" } }
-//   { "'Calendar'[Start of Year]", new List<string> { "DATE(2025,1,1)" } }
+//   { "'Table C'[Column C]", new List<string> { "Value 1", "Value 2" } }
+//   { "'Date'[Start of Year]", new List<string> { "DATE(2025,1,1)" } }
 
 var crossProductValueFilters = new Dictionary<string, List<string>>
 {
-    // { "'Projects'[Project Scope Type Desc]", new List<string> { "Turn" } },
-    // { "'Work Orders'[Work Order Priority Desc]", new List<string> { "Emergency", "Urgent" } },
+    // { "'Table C'[Column C]", new List<string> { "Value 1" } },
+    // { "'Table D'[Column D]", new List<string> { "Value 2", "Value 3" } },
 };
 
 
@@ -183,13 +183,13 @@ var crossProductValueFilters = new Dictionary<string, List<string>>
 // are passed through raw.
 //
 // Examples:
-//   { "'Calendar'[Year]", new List<string> { "2026" } }
-//   { "'Calendar'[Start of Year]", new List<string> { "DATE(2025,1,1)" } }
-//   { "'Properties'[Property Current Same Home Reporting]", new List<string> { "Y" } }
+//   { "'Date'[Year]", new List<string> { "2026" } }
+//   { "'Date'[Start of Year]", new List<string> { "DATE(2025,1,1)" } }
+//   { "'Table A'[Column A]", new List<string> { "Value 1" } }
 
 var globalFilters = new Dictionary<string, List<string>>
 {
-    // { "'Calendar'[Year]", new List<string> { "2026" } },
+    // { "'Date'[Year]", new List<string> { "2026" } },
 };
 
 

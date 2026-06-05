@@ -17,7 +17,7 @@ Trigger when:
 - The session has produced structural changes and needs post-refactor validation (Phase 5 of `refactor-strategy/SKILL.md`)
 
 Do NOT use for:
-- General DAX debugging (use `pbi-dax-patterns.md` or `mc-dax-performance.md`)
+- General DAX debugging (use `pbi-dax-patterns.md` or `{model}-dax-performance.md`)
 - Performance benchmarking only (use DAX Studio traces directly)
 - Report-level visual testing (this skill tests the semantic model layer)
 
@@ -37,7 +37,7 @@ Before generating any test, Claude must understand two things: **what the model 
 ### 1.1 Establish the Model Context
 
 Check what Claude already knows:
-- Search `pbi-models.md` for the model name and structure
+- Check the model's KB notes (`{model}-*.md`) and any `artifacts/model-schema/` snapshot for the model name and structure
 - Check memory edits for known gotchas, relationship patterns, or calc column rules
 - If a `.bim` file is available (uploaded or previously parsed), use it for structural truth
 
@@ -51,7 +51,7 @@ If the model is unknown, ask the user:
 The change scope drives everything downstream. Accept it via **one of two paths**:
 
 **Path A — User describes the change explicitly:**
-The user says something like "I'm adding a direct FK from Work Orders to Properties and changing the bridge to single-direction." Claude extracts:
+The user says something like "I'm adding a direct FK from [Table A] to [Table B] and changing the bridge to single-direction." Claude extracts:
 - Which relationships are being added, removed, or modified (direction, cardinality, active/inactive)
 - Which measures are being rewritten (new DAX)
 - Which calc columns are being added or removed
@@ -76,11 +76,11 @@ Present the inferred diff to the user as a summary table:
 ├──────────┬──────────────────────────────────────────────────┤
 │ Category │ Details                                          │
 ├──────────┼──────────────────────────────────────────────────┤
-│ Rels (+) │ Work Orders → Properties (active, single, M:1)  │
+│ Rels (+) │ [Table A] → [Table B] (active, single, M:1)      │
 │ Rels (~) │ Bridge bidir → single direction                  │
-│ Rels (-) │ Bridge → Properties (deleted)                    │
+│ Rels (-) │ Bridge → [Table B] (deleted)                     │
 │ Measures │ 8 measures with modified DAX                     │
-│ Columns  │ +1 calc column on Open Work Orders (_OwnerPct)   │
+│ Columns  │ +1 calc column on [Table C] (_CalcCol)           │
 │ Inactive │ 20 unused inactive relationships removed         │
 └──────────┴──────────────────────────────────────────────────┘
 ```
@@ -131,9 +131,9 @@ Always present the tier classification before proceeding:
 ├──────┬───────┬─────────────────────────────────────────────┤
 │ Tier │ Count │ Examples                                     │
 ├──────┼───────┼─────────────────────────────────────────────┤
-│  1   │   8   │ Avg Open WO Age DK, Open WO Count Prop...  │
-│  2   │  14   │ Avg Open WO Age DK (YTD), WO Cost Prop... │
-│  3   │  67   │ Total Budget, Leasing Revenue...            │
+│  1   │   8   │ [Measure A], [Measure B], ...               │
+│  2   │  14   │ [Measure A] (YTD), [Measure C], ...         │
+│  3   │  67   │ [Measure D], [Measure E], ...               │
 │ Skip │  11   │ _FormatColor, _SVGBar, _TooltipHeader...    │
 └──────┴───────┴─────────────────────────────────────────────┘
 
@@ -163,11 +163,11 @@ When the user says something like "test some measures," "spot-check the model," 
 ├─────────────┬───────┬──────────────────────────────────────┤
 │ Domain      │ Count │ Examples                              │
 ├─────────────┼───────┼──────────────────────────────────────┤
-│ Work Order  │   7   │ WO Count by Completed Date, ...      │
-│ Project     │   5   │ Project Approved Cost Base, ...       │
-│ Open WO     │   4   │ Open Work Orders Count DK, ...       │
-│ Property    │   2   │ Avg Daily Open Properties %, ...      │
-│ Other       │   2   │ Average Resident Tenure, ...          │
+│ [Domain A]  │   7   │ [Measure A], [Measure B], ...         │
+│ [Domain B]  │   5   │ [Measure C], ...                      │
+│ [Domain C]  │   4   │ [Measure D], ...                      │
+│ [Domain D]  │   2   │ [Measure E], ...                      │
+│ Other       │   2   │ [Measure F], ...                      │
 └─────────────┴───────┴──────────────────────────────────────┘
 
 Want to adjust the sample size or swap any measures?
@@ -177,12 +177,12 @@ Want to adjust the sample size or swap any measures?
 
 #### 1.4b Domain or Type Filtering (user specifies a category)
 
-When the user says "test all cost measures," "test property measures," "test the count measures," or similar:
+When the user says "test all cost measures," "test [domain] measures," "test the count measures," or similar:
 
 1. **Parse the request** into domain filter, type filter, or both:
    - "cost measures" → type = cost
-   - "property measures" → domain = property
-   - "project count measures" → domain = project AND type = count
+   - "[domain] measures" → domain = [domain]
+   - "[domain] count measures" → domain = [domain] AND type = count
 
 2. **Filter the measure list** from the `.bim` using the classification rules below.
 
@@ -208,18 +208,18 @@ Before using this path, confirm the MCP server is installed and connected. If un
 TE CLI will support headless read operations against Power BI models without a `.bim` file, enabling automated measure/column enumeration. When available, it will be equivalent to Option 1 for domain derivation. For now, note this as a future path and fall back to Option 4.
 
 **Option 4 — Ask the user:**
-If none of the above are available, ask: "What are the main subject areas in your model? (e.g., Work Orders, Projects, Occupancy Units) — I'll use these to group the measure list." Once the user describes the domains, use **semantic interpretation** (not literal keyword/string matching) to propose which measures belong to each domain, then confirm. Naming conventions vary widely — a measure named "Avg Days Open" may belong to a "Work Orders" domain even though those exact words don't appear in the name.
+If none of the above are available, ask: "What are the main subject areas in your model? (e.g., Sales, Inventory, Customers) — I'll use these to group the measure list." Once the user describes the domains, use **semantic interpretation** (not literal keyword/string matching) to propose which measures belong to each domain, then confirm. Naming conventions vary widely — a measure named "Avg Days to Close" may belong to a "Sales" domain even though those exact words don't appear in the name.
 
-*Example for reference (M&C model only):*
+*Example for reference:*
 
 | Domain | Home table |
 |--------|------------|
-| Open WO | "Open Work Orders" |
-| Work Order | "Work Orders" |
-| Project | "Projects" |
-| Property | "Properties" |
-| PO Detail | "PO Detail" |
-| Vendor | "Vendors" |
+| [Domain A] | "[Table A]" |
+| [Domain B] | "[Table B]" |
+| [Domain C] | "[Table C]" |
+| [Domain D] | "[Table D]" |
+| [Domain E] | "[Table E]" |
+| [Domain F] | "[Table F]" |
 
 **Type classification** (by DAX expression pattern — first match wins):
 
@@ -235,7 +235,7 @@ If none of the above are available, ask: "What are the main subject areas in you
 
 **Implementation notes:**
 - When a `.bim` is available, Claude can automate this classification by parsing measure names and DAX expressions with simple string matching (no regex engine needed — `Contains()` is sufficient).
-- When no `.bim` is available, Claude asks the user: "Can you give me a rough breakdown of your measures by domain? For example, how many are work order measures vs. project measures?"
+- When no `.bim` is available, Claude asks the user: "Can you give me a rough breakdown of your measures by domain? For example, how many are [domain A] measures vs. [domain B] measures?"
 - These classifications are heuristic. Always present the result for user confirmation — edge cases exist (e.g., a measure may span two domains based on its name or logic).
 
 ---
@@ -258,7 +258,7 @@ The filter contexts to test depend on **which dimensions are connected to the af
 | **Group by primary dimension** | Filter propagation through the main relationship path | Always for Tier 1 & 2 — use the dimension most connected to the changed tables |
 | **Group by calendar** (Year or Month) | Time-based filter propagation | When calendar relationships are involved in the change |
 | **Cross-dimension** (Dim A × Dim B) | Combined filter interaction | Tier 1 only — when the change affects how multiple dimensions filter a fact table |
-| **Specific filter value** (e.g., a known property, a known year) | Spot-check a known-good result | When the user knows what a specific answer should be |
+| **Specific filter value** (e.g., a known dimension value, a known year) | Spot-check a known-good result | When the user knows what a specific answer should be |
 
 #### Single-Dimension vs. Cross-Product Queries
 
@@ -269,8 +269,8 @@ The filter contexts to test depend on **which dimensions are connected to the af
 - Report pages use multi-slicer layouts where dimensions interact
 - The user explicitly requests it
 
-**Cross-product cardinality warning:** Cross-products can cause OutOfMemoryException in TE3 when high-cardinality dimensions are involved (e.g., Vendor Name × Calendar Month × Property produces millions of rows serialized to JSON). Rules:
-- **Always exclude high-cardinality dimensions** (Vendor Name, Property Name, etc.) from cross-products — test those as single-dimension queries
+**Cross-product cardinality warning:** Cross-products can cause OutOfMemoryException in TE3 when high-cardinality dimensions are involved (e.g., a name column × Month × another name column produces millions of rows serialized to JSON). Rules:
+- **Always exclude high-cardinality dimensions** (individual name/ID columns, etc.) from cross-products — test those as single-dimension queries
 - **Only combine low-cardinality dimensions** (status flags, fiscal year, category/type fields — typically 2–20 distinct values)
 - Maximum recommended cross-product: 3 low-cardinality dimensions
 - When in doubt, ask the user about dimension cardinality
@@ -281,10 +281,10 @@ Cross-product context labels use a `_x_` separator in the test case ID (e.g., `b
 
 ```csharp
 // Generic form — replace with columns from your model:
-{ "by_dim1_x_year", "'[YourDimTable]'[LowCardinalityColumn]|'Calendar'[YearColumn]" },
-{ "by_dim1_x_year_x_status", "'[YourDimTable]'[LowCardinalityColumn]|'Calendar'[YearColumn]|'[StatusTable]'[StatusColumn]" },
-// M&C example:
-// { "by_same_home_x_year", "'Properties'[Property Current Same Home Reporting]|'Calendar'[Start of Year]" },
+{ "by_dim1_x_year", "'[YourDimTable]'[LowCardinalityColumn]|'Date'[Year]" },
+{ "by_dim1_x_year_x_status", "'[YourDimTable]'[LowCardinalityColumn]|'Date'[Year]|'[StatusTable]'[StatusColumn]" },
+// Example:
+// { "by_flag_x_year", "'Table A'[Column A]|'Date'[Start of Year]" },
 ```
 
 The DAX construction block splits on `|` and builds the appropriate SUMMARIZECOLUMNS with multiple grouping columns.
@@ -308,7 +308,7 @@ When `maxRowsPerContext > 0`:
           )
       )
   )
-  // M&C example: partition = 'Properties'[Property Current Same Home Reporting], detail = 'Calendar'[Start of Year]
+  // Example: partition = 'Table A'[Column A], detail = 'Date'[Start of Year]
   ```
 
   The first column (the partition column) serves as the outer loop. For each distinct value, TOPN returns the top N rows from the remaining dimensions. This validates that the combined filter context produces correct results across different partition slices.
@@ -316,8 +316,8 @@ When `maxRowsPerContext > 0`:
   **Column ordering matters** — when defining cross-product entries in `groupByColumns`, place the lower-cardinality / more-important-to-partition-by column first. Example: `StatusFlag (2 values) | Year (5 values)` → partitions by StatusFlag, top N years within each.
 
 Ask the user:
-- "For the primary dimension grouping, should I use [DimProperty / PropertyName]? What about calendar — [DimCalendar / FiscalYear]?"
-- "Any specific filter values you want to pin? For example, a property or fiscal year where you know the expected result?"
+- "For the primary dimension grouping, should I use ['Table A' / Column A]? What about calendar — ['Date' / Year]?"
+- "Any specific filter values you want to pin? For example, a dimension value or fiscal year where you know the expected result?"
 - "Are there any dimension combinations your reports use that would exercise the changed relationship paths?"
 - "For cross-product tests, which dimensions should I combine? I'd recommend low-cardinality pairs (status flags, category types, fiscal year)."
 
@@ -328,7 +328,7 @@ Identify and ask about these before generating test queries:
 - **TODAY()/NOW() measures:** "These measures use TODAY(): [list]. I'll pin them to a fixed date using TREATAS. What date should I use? (e.g., the last full fiscal month)"
 - **Calculation groups:** "Your model has [N] calculation group items. Should I test Tier 1 measures with each calc group item applied (e.g., YTD, MTD, PY), or just the base measure?"
 - **RLS:** "Is Row-Level Security active on this model? If so, test results depend on the identity. Which role should I test under?"
-- **Large dimensions:** "Do any of your dimensions have high cardinality (e.g., individual property or entity names with 100+ distinct values)? For those, should I group by that dimension for all tiers, or only Tier 1? (Tier 2+ could use a TOPN cap to keep result sets manageable)"
+- **Large dimensions:** "Do any of your dimensions have high cardinality (e.g., individual entity or item names with 100+ distinct values)? For those, should I group by that dimension for all tiers, or only Tier 1? (Tier 2+ could use a TOPN cap to keep result sets manageable)"
 
 ### 2.3 Generate the Test Manifest
 
@@ -348,47 +348,47 @@ After user confirmation, Claude generates a `test-manifest.json` that records ev
   },
   "filter_fields": [
     {"col": "'[DimTable]'[SlicerColumn]", "label": "by_dim"},
-    {"col": "'Calendar'[YearColumn]",     "label": "by_year"}
+    {"col": "'Date'[Year]",               "label": "by_year"}
   ],
   "cross_products": [
     {
       "label": "by_dim_x_year",
       "columns": [
         "'[DimTable]'[SlicerColumn]",
-        "'Calendar'[YearColumn]"
+        "'Date'[Year]"
       ],
       "topn_partition_col": "'[DimTable]'[SlicerColumn]"
     }
   ],
-  "_note": "M&C example: filter_fields use Properties[Property Current Same Home Reporting] and Calendar[Start of Year].",
+  "_note": "Example: filter_fields use 'Table A'[Column A] and 'Date'[Start of Year].",
   "measure_selection": {
     "method": "explicit | random_sample | domain_filter | type_filter",
     "sample_size": 20,
     "domain_filter": null,
     "type_filter": null,
-    "seed_description": "Stratified sample: 7 WO, 5 Project, 4 OWO, 2 Property, 2 Other"
+    "seed_description": "Stratified sample: 7 [Domain A], 5 [Domain B], 4 [Domain C], 2 [Domain D], 2 Other"
   },
   "test_cases": [
     {
       "id": "t001",
-      "measure": "Avg Open WO Age DK",
-      "measure_table": "Work Orders",
+      "measure": "[Measure A]",
+      "measure_table": "[Table A]",
       "tier": 1,
       "context": "grand_total",
       "description": "Grand total — no filter context"
     },
     {
       "id": "t002",
-      "measure": "Avg Open WO Age DK",
-      "measure_table": "Work Orders",
+      "measure": "[Measure A]",
+      "measure_table": "[Table A]",
       "tier": 1,
-      "context": "by_same_home",
+      "context": "by_dim",
       "description": "Grouped by <dim> — tests filter propagation through direct FK"
     },
     {
       "id": "t010",
-      "measure": "Avg Open WO Age DK",
-      "measure_table": "Work Orders",
+      "measure": "[Measure A]",
+      "measure_table": "[Table A]",
       "tier": 1,
       "context": "by_dim_x_year",
       "description": "Cross-product: <dim> × Year — tests combined filter interaction"
@@ -409,7 +409,7 @@ Test Manifest Summary:
   Total: 149 test cases
 
   Cross-product contexts:
-    by_same_home_x_year (2 cols, ~10 rows per measure)
+    by_dim1_x_year (2 cols, ~10 rows per measure)
     by_status_x_year (2 cols, ~25 rows per measure)
 
   TOPN: 5 per group (cross-products), 5 overall (single-dimension)
@@ -429,7 +429,7 @@ Ready to generate the capture script?
 > **READ-ONLY TEMPLATE — copy first, edit second.**
 > `scripts/capture-snapshot.csx` is a tested template and MUST NOT be edited
 > in place. Always copy it to `output/{label}.csx` (e.g.
-> `output/mc-baseline.csx`, `output/occupancy-refactored.csx`) and apply
+> `output/{model}-baseline.csx`, `output/{model}-refactored.csx`) and apply
 > session-specific edits to the **copy**. The user runs the copy in
 > `output/`; the template stays untouched so future sessions inherit the
 > verified version. If you find yourself about to edit
@@ -449,7 +449,7 @@ The placeholder at the top of the script reads:
 Replace it with the session's actual purpose and test-case total. Example:
 
 ```csharp
-// PURPOSE:  Capture regression test snapshot for M&C ownership percentage fix.
+// PURPOSE:  Capture regression test snapshot for a [model] relationship change.
 //           96 test cases (12 Tier 1 measures × 8 contexts incl. 2 cross-products).
 ```
 
@@ -460,10 +460,10 @@ Replace the default value of `var modelName = ... ?? "<MODEL NAME — replaced p
 
 ```csharp
 var modelName = System.Environment.GetEnvironmentVariable("MODEL_NAME")
-    ?? "Occupancy";
+    ?? "Sales";
 ```
 
-The `MODEL_NAME` env var override stays — it lets the user change the name per-run via the CLI without editing the script. The value flows into the JSON snapshot header (`"model_name": "Occupancy"`) which `compare-snapshots.py` reads for the report title.
+The `MODEL_NAME` env var override stays — it lets the user change the name per-run via the CLI without editing the script. The value flows into the JSON snapshot header (`"model_name": "Sales"`) which `compare-snapshots.py` reads for the report title.
 
 **Section 3 — `testLines` (test case definitions):**
 Replace the `var testLines = new List<string> { ... };` block with the test cases generated from Phase 2. Each line follows the format `id|measure|context`. Example:
@@ -471,10 +471,10 @@ Replace the `var testLines = new List<string> { ... };` block with the test case
 ```csharp
 var testLines = new List<string>
 {
-    "t0001|Avg Open WO Age DK|grand_total",
-    "t0002|Avg Open WO Age DK|by_same_home",
-    "t0003|Avg Open WO Age DK|by_year",
-    "t0010|Avg Open WO Age DK|by_same_home_x_year",
+    "t0001|[Measure A]|grand_total",
+    "t0002|[Measure A]|by_dim1",
+    "t0003|[Measure A]|by_year",
+    "t0010|[Measure A]|by_dim1_x_year",
     // ... generated from the confirmed test manifest
 };
 ```
@@ -487,15 +487,15 @@ var groupByColumns = new Dictionary<string, string>
 {
     // Single-dimension contexts — replace with columns from your model:
     { "by_dim1", "'[YourDimTable]'[SlicerColumn]" },
-    { "by_year", "'Calendar'[YearColumn]" },
+    { "by_year", "'Date'[Year]" },
     { "by_status", "'[StatusTable]'[StatusColumn]" },
 
     // Cross-product contexts (pipe-separated, first column = TOPN partition)
-    { "by_dim1_x_year", "'[YourDimTable]'[SlicerColumn]|'Calendar'[YearColumn]" },
-    { "by_status_x_year", "'[StatusTable]'[StatusColumn]|'Calendar'[YearColumn]" },
+    { "by_dim1_x_year", "'[YourDimTable]'[SlicerColumn]|'Date'[Year]" },
+    { "by_status_x_year", "'[StatusTable]'[StatusColumn]|'Date'[Year]" },
 };
-// M&C example: by_same_home = 'Properties'[Property Current Same Home Reporting],
-//              by_wo_status = 'Work Orders'[Work Order Status Desc]
+// Example: by_flag = 'Table A'[Column A],
+//          by_status = 'Table B'[Column B]
 ```
 
 **Everything else in the template is copied verbatim**, including:
@@ -661,7 +661,7 @@ To run:
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Regression Test Report
-  Model: Maintenance & Construction
+  Model: Sales
   Baseline:   2026-03-26T10:05:00
   Refactored: 2026-03-26T10:22:00
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -712,7 +712,7 @@ To run:
 
 Each entry has this format:
 ```
-t0081 | Avg Open Work Orders Age | by_market_x_month | 2547ms
+t0081 | [Measure A] | by_dim1_x_month | 2547ms
   Type: memory_watchdog
   Reason: memory threshold 80% sustained for 1500ms mid-query (cancelled by watchdog)
   DAX: <full query>
@@ -732,7 +732,7 @@ When failures are found, Claude helps interpret them:
 - **BLANK → 0 changes:** Usually means a relationship path that previously returned no match (BLANK) now returns a match through a new direct FK. This can be correct or incorrect depending on intent. Ask the user: "Is it expected that [entity name] now returns 0 instead of BLANK for this measure? This could mean the new FK found a matching row where the bridge previously didn't."
 - **Row count mismatches:** Almost always a broken filter propagation path. A dimension value that was reachable through the old relationship topology is no longer reachable. This is a regression. For cross-product tests, also check whether a partition value itself disappeared (e.g., a Year that was reachable via the old bridge path is no longer reachable).
 - **Numeric differences (with zero tolerance):** If the DAX logic was truly equivalent, these shouldn't happen. Investigate whether the difference traces to the relationship change or to a DAX rewrite error.
-- **Expected intentional changes:** The user may have intentionally corrected bugs (e.g., adding proportionate ownership logic that didn't exist before, fixing project table interactions). These will show as legitimate value differences, not row count mismatches. The user should triage these manually from the diff CSV.
+- **Expected intentional changes:** The user may have intentionally corrected bugs (e.g., adding weighting logic that didn't exist before, fixing a table interaction). These will show as legitimate value differences, not row count mismatches. The user should triage these manually from the diff CSV.
 - **Cross-product specific:** If a cross-product test fails but its constituent single-dimension tests pass, the issue is in the filter interaction — both dimensions filter correctly in isolation but break when combined. This is the key scenario cross-product tests are designed to catch.
 - **Timeout (newly):** Measure was fast before the refactor but now hangs → the refactor changed a relationship or filter path that caused the engine to scan a much larger table. Check for new bidir relationships, removed CROSSFILTER restrictions, or a removed inactive relationship that now activates an expensive path.
 
@@ -746,10 +746,10 @@ If failures are found:
 
 ### 5.3 Document
 
-Once all tests pass, trigger the session learning loop from `pbi-project-instructions-webchat.md`:
+Once all tests pass, trigger the session learning loop (see `CLAUDE.md`):
 - Record the test results as validation evidence for the refactor
-- Note any unexpected findings (e.g., "BLANK → 0 on 4 properties was expected because the new direct FK covers cases the bridge missed")
-- Update `mc-gotchas.md` if new edge cases were discovered
+- Note any unexpected findings (e.g., "BLANK → 0 on 4 dimension values was expected because the new direct FK covers cases the bridge missed")
+- Update `{model}-gotchas.md` if new edge cases were discovered
 
 ---
 
@@ -853,7 +853,7 @@ This skill adapts its test strategy based on the type of change. Here are common
 - **Focus:** Downstream measures that use the calc column — do they produce correct results?
 - **Key test:** Measures that previously used runtime lookups (e.g., `RELATED()`, `LOOKUPVALUE()`) and now use the pre-computed calc column
 - **Cross-product value:** Low — calc column changes rarely affect filter interactions
-- **Gotcha:** Calc column type mismatches (e.g., TEXT vs DECIMAL for Ownership Pct — requires VALUE() conversion)
+- **Gotcha:** Calc column type mismatches (e.g., TEXT vs DECIMAL for a percentage column — requires VALUE() conversion)
 
 ### Calculation Group Changes
 - **Focus:** All measures that the calc group modifies

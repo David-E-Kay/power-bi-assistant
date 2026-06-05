@@ -10,22 +10,23 @@
 #
 # Removing an entry here does NOT delete the cached .md file. Use the
 # skill's "remove" branch (which deletes both) or remove both manually.
+#
+# OPTIONAL INTEGRATION — empty by default. Confluence caching is OFF until you
+# configure `site` below and cache your first page (see
+# .claude/skills/confluence-cache/references/setup.md). With a null
+# `site.cloud_id` and an empty `pages:` list, the skill's pre-flight reports
+# "not configured → run setup" and stops cleanly. If you don't use Confluence,
+# leave this file as-is and route any Confluence questions to the live
+# Atlassian MCP instead.
 
 site:
-  cloud_id: 2bc1c319-f147-4244-b7e5-a024ba5a53fc
-  url: https://triconah.atlassian.net
+  cloud_id: null
+  url: https://<your-org>.atlassian.net
   # Default space for "list pages in our space" queries. The skill can
   # still cache pages from any space the user references by URL or ID.
   primary_space:
-    key: DATA
-    id: "469499920"
-    name: Data and Analytics
+    key: null
+    id: null
+    name: null
 
-pages:
-  - id: "2475098115"
-    space_key: "DATA"
-    slug: "sop-dax-and-data-modeling"
-    title: "[SOP] DAX and Data Modeling"
-    url: "https://triconah.atlassian.net/wiki/spaces/DATA/pages/2475098115/SOP+DAX+and+Data+Modeling"
-    last_modified: "Apr 10, 2026"
-    last_synced: "2026-05-09T00:00:00Z"
+pages: []

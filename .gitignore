@@ -4,7 +4,12 @@ Thumbs.db
 
 # Machine-local Claude Code config (keep .claude/skills/ — it's project content)
 .claude/settings.local.json
+# per-user MCP server paths — not tied to the project
+.claude/.mcp.json
 
 # Python
 __pycache__/
 *.pyc
+
+# Session deliverables — kept on disk locally, never published
+output/

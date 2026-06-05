@@ -213,7 +213,7 @@ flowchart LR
 #    retrieves from. Claude runs:
 python scripts/bim_to_kb_markdown.py "C:\models\{model}.bim" --output artifacts/model-schema/{model-name}.md</code></pre>
   </div>
-  <p style="font-size: 0.9rem; color: var(--text-muted);">The script uses only stdlib Python — no install needed. After parsing, tell Claude something like <em>"index <code>artifacts/model-schema/mc.md</code>"</em> and you're ready for Phase 1. The output markdown is a snapshot, so re-run when the model changes.</p>
+  <p style="font-size: 0.9rem; color: var(--text-muted);">The script uses only stdlib Python — no install needed. After parsing, tell Claude something like <em>"index <code>artifacts/model-schema/{model}.md</code>"</em> and you're ready for Phase 1. The output markdown is a snapshot, so re-run when the model changes.</p>
 
   <h3>The five phases</h3>
   <p>Phases 1 and 2 are <strong>conversational with Claude</strong> — describe the change in plain English and Claude builds the tiered measure list, applies any exclusions you want ("all EOP measures", "anything <code>_</code>-prefixed", "calc-group helpers"), and proposes the test matrix (dimensions, global filters, TOPN cap). Phases 3–5 are mechanical: run the capture script, run the comparator, read the report.</p>
@@ -268,10 +268,10 @@ flowchart TD
   </ol>
   <p>What <code>testLines</code> + <code>groupByColumns</code> look like once Claude is done populating them:</p>
   <div class="code-wrap">
-    <pre><code class="language-csharp">testLines.Add("Avg Open WO Age", "by Month and Status");
+    <pre><code class="language-csharp">testLines.Add("[Measure A]", "by Month and Status");
 groupByColumns["by Month and Status"] = new[] {
-    "'Calendar'[Start of Month]",
-    "'Work Orders'[Work Order Status Desc]"
+    "'Date'[Start of Month]",
+    "'Table A'[Column A]"
 };</code></pre>
   </div>
   <p>Once you've reviewed the populated file in chat and given the green light, open <code>output/{label}.csx</code> in TE3 (with TE3 already connected to your model — see §1's pre-run callout) and press <kbd>F5</kbd>. That's the hand-off into Part 2.</p>
@@ -294,9 +294,9 @@ groupByColumns["by Month and Status"] = new[] {
 TOPN(
     5,
     SUMMARIZECOLUMNS(
-        'Calendar'[Start of Month],
-        'Work Orders'[Work Order Status Desc],
-        "Result", CALCULATE([Avg Open WO Age], KEEPFILTERS('Calendar'[Year] = 2025))
+        'Date'[Start of Month],
+        'Table A'[Column A],
+        "Result", CALCULATE([Measure A], KEEPFILTERS('Date'[Year] = 2025))
     )
 )</code></pre>
   </div>
@@ -305,13 +305,13 @@ TOPN(
 
 <section id="walkthrough" data-layer="3">
   <h2><span class="layer-badge l3">Layer 3</span>7. First-Day Walkthrough</h2>
-  <p><strong>Scenario:</strong> validating a new direct foreign key between <code>Work Orders</code> and <code>Properties</code>, replacing an older bridge-table path.</p>
+  <p><strong>Scenario:</strong> validating a new direct foreign key between <code>[Table A]</code> and <code>[Table B]</code>, replacing an older bridge-table path.</p>
 
   <div class="checklist" data-checklist="walkthrough-steps">
     <div class="checklist-title">First-day walkthrough <span class="checklist-progress"></span></div>
     <ul>
       <li><input type="checkbox" id="wt1"><label for="wt1"><strong>Step 1:</strong> Plan with Claude — describe the change, agree on tiers, exclusions ("skip all EOP measures"), dimensions, and TOPN cap</label></li>
-      <li><input type="checkbox" id="wt2"><label for="wt2"><strong>Step 2:</strong> Have Claude populate <code>output/{label}.csx</code> (or run <code>apply-mc-testlines.py</code> for the M&amp;C model)</label></li>
+      <li><input type="checkbox" id="wt2"><label for="wt2"><strong>Step 2:</strong> Have Claude populate <code>output/{label}.csx</code> — it generates the testLines + groupByColumns from the model schema and injects them into a copy of the template</label></li>
       <li><input type="checkbox" id="wt3"><label for="wt3"><strong>Step 3:</strong> Capture baseline (~5 min at TOPN=5)</label></li>
       <li><input type="checkbox" id="wt4"><label for="wt4"><strong>Step 4:</strong> Apply the change to the model</label></li>
       <li><input type="checkbox" id="wt5"><label for="wt5"><strong>Step 5:</strong> Capture refactored (~5 min)</label></li>
@@ -464,12 +464,12 @@ TOPN(
             <div class="admin-step" data-step="1">
               <h4>Pick a folder for snapshots</h4>
               <p>Default is <code>Desktop\PBI-Regression</code>. Change it via env var if you prefer somewhere else:</p>
-              <input type="text" id="outdirPath" class="admin-input" value="C:\Users\dkay\Desktop\PBI-Regression" oninput="updateOutdirCmd()">
+              <input type="text" id="outdirPath" class="admin-input" value="C:\path\to\PBI-Regression" oninput="updateOutdirCmd()">
             </div>
             <div class="admin-step" data-step="2">
               <h4>Persist the env var (PowerShell)</h4>
               <div class="code-wrap">
-                <pre><code class="language-powershell" id="outdirCmd">[Environment]::SetEnvironmentVariable("OUTPUT_DIR", "C:\Users\dkay\Desktop\PBI-Regression", "User")</code></pre>
+                <pre><code class="language-powershell" id="outdirCmd">[Environment]::SetEnvironmentVariable("OUTPUT_DIR", "C:\path\to\PBI-Regression", "User")</code></pre>
               </div>
               <div class="admin-actions">
                 <button class="btn btn-primary" onclick="markCardDone('outdir')">Mark as done</button>

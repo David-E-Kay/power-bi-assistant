@@ -1,6 +1,6 @@
 # Confluence Cache — Developer Guide
 
-An overview of how this Power BI Assistant bridges three knowledge sources (D&A team's Confluence space, the local KB in this repo, and Kurt Buhler's [data-goblin plugin](https://github.com/data-goblin/power-bi-agentic-development)'s how-to skills), plus how it manages memory and information retrieval. This is how the assistant gets its information when you ask a question.
+An overview of how this Power BI Assistant bridges three knowledge sources (your team's Confluence space, the local KB in this repo, and the [data-goblin plugin](https://github.com/data-goblin/power-bi-agentic-development)'s how-to skills), plus how it manages memory and information retrieval. This is how the assistant gets its information when you ask a question.
 
 ---
 
@@ -88,9 +88,9 @@ Developers using this repo don't write to `knowledge/` or `artifacts/` directly 
 | Step | Source | Skill / file |
 |---|---|---|
 | Validated patterns for USERELATIONSHIP | Local KB | `knowledge/pbi-dax-patterns.md` |
-| Prior bridge-scan findings on this model | Local KB | `knowledge/mc-dax-performance.md` |
-| Team standard for bridge traversal | Cached Confluence | `knowledge/confluence/sop-dax-and-data-modeling.md` |
-| Actual relationship topology | `.bim` snapshot *(live TE3 CLI pending)* | `artifacts/model-schema/model-schema-mc.md` |
+| Prior bridge-scan findings on this model | Local KB | `knowledge/{model}-dax-performance.md` |
+| Team standard for bridge traversal | Cached Confluence | `knowledge/confluence/<cached-standard>.md` |
+| Actual relationship topology | `.bim` snapshot *(live TE3 CLI pending)* | `artifacts/model-schema/model-schema-<model>.md` |
 | Optimization workflow (HOW to fix) | Plugin skill | `semantic-models:dax` |
 | Standard not yet cached? Fall back live | Live MCP | Atlassian `getConfluencePage` |
 

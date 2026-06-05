@@ -48,8 +48,8 @@ python scripts/bim_to_kb_markdown.py "<bim_path>" --model-name "<Model Display N
 ```
 
 Flag values:
-- `--model-name`: The human-readable model name (e.g., `"Maintenance & Construction"`, `"Occupancy"`)
-- `-o`: Output path. Write directly to `artifacts/model-schema/model-schema-<slug>.md` where `<slug>` is a lowercase hyphenated version of the model name (e.g., `artifacts/model-schema/model-schema-mc.md`, `artifacts/model-schema/model-schema-occupancy.md`)
+- `--model-name`: The human-readable model name (e.g., `"Sales"`, `"Inventory"`)
+- `-o`: Output path. Write directly to `artifacts/model-schema/model-schema-<slug>.md` where `<slug>` is a lowercase hyphenated version of the model name (e.g., `artifacts/model-schema/model-schema-sales.md`, `artifacts/model-schema/model-schema-inventory.md`)
 
 If the user doesn't specify a model name, the script derives one from the .bim metadata or filename.
 
@@ -97,14 +97,13 @@ TOM uses both string values (`"manyToOne"`, `"oneDirection"`) and numeric values
 
 The heuristic classifies tables based on naming conventions first, then relationship topology. Tables that sit on both the "many" and "one" sides of multiple relationships get classified as `BRIDGE`, which is often wrong for core operational tables.
 
-**Known misclassifications in M&C model:**
-- `Projects` → classified as BRIDGE (actually a dimension with many FKs in and out)
-- `Work Orders` → classified as BRIDGE (core operational table)
-- `Properties` → classified as BRIDGE (primary dimension)
-- `Open Work Orders` → classified as DIM (actually a snapshot/fact table)
+Table-type inference is heuristic and may need per-model correction. Common misclassifications:
+- A dimension with many FKs in and out can be mislabeled `BRIDGE`.
+- A core operational fact/snapshot table sitting between dimensions can be mislabeled `BRIDGE`.
+- A snapshot/fact table with few inbound relationships can be mislabeled `DIM`.
 
 The type labels in the markdown are for orientation only — they don't affect the structural metadata (columns, relationships, measures all render correctly regardless). If the user wants corrected types, they can either:
-- Override manually in the output file before uploading to PK
+- Override the type manually in the output file after generation
 - Request a `--type-overrides` flag be added to the script (future enhancement)
 
 ### Measure home table
@@ -132,7 +131,7 @@ The output markdown is structured for optimal RAG chunking:
 #### <Measure Name>                         ← L4: full DAX in code block
 ```
 
-Each heading level creates a natural RAG chunk boundary. When Claude searches for "Open Work Orders relationships," RAG returns the relationships section and the Open Work Orders table detail — not the entire 12,000-line file.
+Each heading level creates a natural RAG chunk boundary. When Claude searches for "Sales relationships," RAG returns the relationships section and the Sales table detail — not the entire 12,000-line file.
 
 ---
 
@@ -146,10 +145,10 @@ Each heading level creates a natural RAG chunk boundary. When Claude searches fo
 - Calculation group items have changed
 
 **Do NOT regenerate** for:
-- Performance findings (→ `mc-dax-performance.md`)
-- Behavioral gotchas (→ `mc-gotchas.md`)
+- Performance findings (→ `{model}-dax-performance.md`)
+- Behavioral gotchas (→ `{model}-gotchas.md`)
 - Validated DAX patterns (→ `pbi-dax-patterns.md`)
-- Design decisions (→ `mc-design-decisions.md`)
+- Design decisions (→ `{model}-design-decisions.md`)
 - Formatting, description, or display folder changes only (low value-to-effort ratio)
 
 ---
