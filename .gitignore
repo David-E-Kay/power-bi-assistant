@@ -13,3 +13,6 @@ __pycache__/
 
 # Session deliverables — kept on disk locally, never published
 output/
+
+# Graphify local knowledge graph outputs
+graphify-out/
