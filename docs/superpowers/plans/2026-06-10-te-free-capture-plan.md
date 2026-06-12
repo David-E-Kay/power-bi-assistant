@@ -1349,6 +1349,16 @@ git commit -m "feat: msmdsrv discovery and connection resolution without TE"
 
 This is the port of `ExecuteDaxWithTimeout` + `IsMemoryCritical` (capture-snapshot.csx lines 339–519). The threading/cancel pattern was proven by the Task 2 spike.
 
+> **⚠ REVISION (2026-06-11, from the Task 2 gate investigation — supersedes the abort path in the `executor.py` code block below):**
+> `cmd.Cancel()` interrupts SE-bound queries (~0.04s) but is a **no-op for pure formula-engine queries** (verified: CROSSJOIN ran 90s+ after Cancel). The original "Cancel → `worker.join(10s)` → leak the connection if still alive (`safe_to_dispose=False`)" path is **replaced** by a connection-drop backstop that works universally:
+> 1. set `abort_reason`, then `try: cmd.Cancel()` (polite; handles the common SE case);
+> 2. `worker.join(CANCEL_GRACE_SECONDS)` where `CANCEL_GRACE_SECONDS = 3`;
+> 3. if `worker.is_alive()`: `try: conn.Dispose()` — dropping the socket interrupts ANY query in ~0.03s (`WSACancelBlockingCall`) and the server cancels the orphaned session;
+> 4. `worker.join(CANCEL_UNWIND_SECONDS)` (10s) to let it unwind;
+> 5. **no leak path** — the Dispose guarantees the worker unblocks, so drop the `safe_to_dispose=False` branch entirely (this also removes the pythonnet shutdown crash). The `finally` may still best-effort `Dispose()` `cmd`/`conn` (idempotent / caught).
+>
+> The background worker's resulting exception (`AdomdConnectionException` "connection lost", or `AdomdErrorResponseException` "cancelled by the user") is ignored in the abort path, which returns `QueryResult(status="timeout", error=abort_reason)`. A fresh connection per query (already in the design) makes discarding a timed-out connection free. The live executor test should assert a slow FE query is interrupted within `timeout + grace + unwind`, and that a *subsequent* query on a fresh connection still succeeds.
+
 - [ ] **Step 1: Write `tests/test_watchdog.py`**
 
 ```python
