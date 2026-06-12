@@ -82,10 +82,23 @@ def test_connect_and_evaluate():
     conn.Dispose()
 
 
-def test_cancel_releases_blocked_query():
-    """THE gate: a Python watchdog thread must be able to cancel a running
-    SE-bound query. If this hangs, pythonnet is not releasing the GIL during
-    ExecuteReader — STOP and invoke the spec's worker-subprocess contingency."""
+def test_watchdog_interrupts_blocked_query():
+    """THE gate: a watchdog thread must be able to interrupt a running query and
+    reclaim resources. Proven mechanism on this machine:
+
+    - The GIL IS released during ExecuteReader (this thread runs the whole time).
+    - cmd.Cancel() interrupts SE-bound queries (the common slow-measure case) in
+      ~0.04s, BUT is a no-op for a pure formula-engine materialization like the
+      CROSSJOIN below (90s+ with no effect).
+    - Dropping the connection (conn.Dispose) interrupts ANY query in ~0.03s — it
+      kills the client socket (WSACancelBlockingCall) and the server cancels the
+      orphaned session. Since the executor uses a fresh connection per query,
+      discarding a timed-out one is free.
+
+    The executor therefore uses: Cancel() -> short grace -> Dispose() backstop.
+    This test exercises the WORST case (FE CROSSJOIN): Cancel will not help, so
+    the Dispose backstop must unblock the worker fast. (SE-bound Cancel is
+    validated against real measures in the Task 7/8 live tests.)"""
     conn = _open_connection()
     from Microsoft.AnalysisServices.AdomdClient import AdomdCommand
     cmd = AdomdCommand(SLOW_DAX, conn)
@@ -105,8 +118,9 @@ def test_cancel_releases_blocked_query():
     t.start()
     time.sleep(2.0)
     assert not done.is_set(), "slow query finished too fast — widen the CALENDAR range"
-    cmd.Cancel()
-    assert done.wait(15), "Cancel() did not unblock ExecuteReader within 15s — GIL contingency required"
+    cmd.Cancel()                  # polite cancel; a no-op for this FE-bound query
+    if not done.wait(3):          # short grace for the SE-cancel path
+        conn.Dispose()            # backstop: drop the connection to force-interrupt
+    assert done.wait(10), "watchdog could not interrupt the query (Cancel + Dispose both failed)"
     assert time.monotonic() - start < 20
-    assert err, "expected the cancelled query to raise"
-    conn.Dispose()
+    assert err, "expected the interrupted query to raise"
