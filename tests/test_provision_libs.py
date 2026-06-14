@@ -65,3 +65,33 @@ def test_extract_dlls_no_lib_raises():
         zf.writestr("readme.txt", b"hi")
     with pytest.raises(ProvisionError):
         provision_libs.extract_dlls(buf.getvalue(), "netfx")
+
+
+def test_provision_writes_dlls_and_is_idempotent(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_download(url):
+        calls.append(url)
+        return _fixture_nupkg()
+
+    monkeypatch.setattr(provision_libs, "_download", fake_download)
+    packages = [("Pkg.One", "A.dll")]
+
+    written = provision_libs.provision(
+        packages, runtime="netfx", dest=tmp_path, version="1.0.0")
+    assert (tmp_path / "A.dll").read_bytes() == b"netfx-A"
+    assert (tmp_path / "B.dll").read_bytes() == b"netfx-B"
+    assert {p.name for p in written} == {"A.dll", "B.dll"}
+    assert len(calls) == 1
+
+    # Re-run: primary dll A.dll already present -> no download, nothing written.
+    written2 = provision_libs.provision(
+        packages, runtime="netfx", dest=tmp_path, version="1.0.0")
+    assert written2 == []
+    assert len(calls) == 1
+
+    # --force re-downloads.
+    written3 = provision_libs.provision(
+        packages, runtime="netfx", dest=tmp_path, version="1.0.0", force=True)
+    assert {p.name for p in written3} == {"A.dll", "B.dll"}
+    assert len(calls) == 2

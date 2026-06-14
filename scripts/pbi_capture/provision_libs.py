@@ -73,3 +73,62 @@ def extract_dlls(nupkg_bytes: bytes, runtime: str) -> dict:
     if not out:
         raise ProvisionError(f"no DLLs under {prefix}")
     return out
+
+
+def _download(url: str) -> bytes:
+    try:
+        with urllib.request.urlopen(url, timeout=60) as resp:
+            return resp.read()
+    except Exception as ex:  # network/HTTP errors -> actionable failure
+        raise ProvisionError(f"download failed: {url} -> {ex}")
+
+
+def provision(packages=DEFAULT_PACKAGES, runtime="netfx", dest=LIBS_DIR,
+              *, version=DEFAULT_VERSION, force=False) -> list:
+    dest = Path(dest)
+    dest.mkdir(parents=True, exist_ok=True)
+    written = []
+    for package_id, primary_dll in packages:
+        if not force and (dest / primary_dll).is_file():
+            continue  # idempotent: already provisioned
+        data = _download(nupkg_url(package_id, version))
+        for fname, content in extract_dlls(data, runtime).items():
+            path = dest / fname
+            path.write_bytes(content)
+            written.append(path)
+    return written
+
+
+def main() -> int:
+    import argparse
+    p = argparse.ArgumentParser(
+        description="Provision Analysis Services client DLLs from NuGet into libs/")
+    p.add_argument("--runtime", default="netfx", choices=["netfx", "coreclr"])
+    p.add_argument("--version", default=DEFAULT_VERSION)
+    p.add_argument("--dest", default=str(LIBS_DIR))
+    p.add_argument("--force", action="store_true")
+    p.add_argument("--packages", default=None,
+                   help="comma-separated package ids (primary dll inferred as <id>.dll)")
+    args = p.parse_args()
+
+    packages = DEFAULT_PACKAGES
+    if args.packages:
+        packages = [(pid.strip(), pid.strip() + ".dll")
+                    for pid in args.packages.split(",") if pid.strip()]
+    try:
+        written = provision(packages, args.runtime, args.dest,
+                            version=args.version, force=args.force)
+    except ProvisionError as ex:
+        print(f"FATAL: {ex}", file=sys.stderr)
+        return 2
+    if written:
+        print(f"Provisioned {len(written)} DLL(s) to {args.dest}")
+        for w in written:
+            print(f"  {w.name}")
+    else:
+        print(f"Already provisioned in {args.dest} (use --force to refresh)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
