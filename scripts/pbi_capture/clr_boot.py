@@ -17,6 +17,13 @@ import os
 import sys
 from pathlib import Path
 
+
+class ClrBootError(RuntimeError):
+    """The CLR/ADOMD bootstrap failed (pythonnet missing, runtime mismatch, or an
+    incompatible ADOMD assembly). Distinct from find_adomd_dll's FileNotFoundError,
+    which means the DLL is simply absent."""
+
+
 _DLL_CANDIDATES = [
     os.environ.get("ADOMD_DLL_PATH", ""),
     r"C:\Program Files\DAX Studio\bin\Microsoft.AnalysisServices.AdomdClient.dll",
@@ -43,10 +50,17 @@ def ensure_adomd() -> None:
     if _loaded:
         return
     dll = find_adomd_dll()
-    if "clr" not in sys.modules and not os.environ.get("PYTHONNET_RUNTIME"):
-        from pythonnet import load
-        load("netfx")  # spike-verified default; see module docstring
-    import clr
-    sys.path.append(str(dll.parent))  # pythonnet probes sys.path for assemblies
-    clr.AddReference("Microsoft.AnalysisServices.AdomdClient")
+    try:
+        if "clr" not in sys.modules and not os.environ.get("PYTHONNET_RUNTIME"):
+            from pythonnet import load
+            load("netfx")  # spike-verified default; see module docstring
+        import clr
+        sys.path.append(str(dll.parent))  # pythonnet probes sys.path for assemblies
+        clr.AddReference("Microsoft.AnalysisServices.AdomdClient")
+    except Exception as ex:
+        raise ClrBootError(
+            f"CLR/ADOMD bootstrap failed ({type(ex).__name__}: {ex}). Ensure pythonnet "
+            f"is installed (pip install pythonnet) and the ADOMD assembly at {dll} is "
+            "compatible with the netfx runtime."
+        ) from ex
     _loaded = True
