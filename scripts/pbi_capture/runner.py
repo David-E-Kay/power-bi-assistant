@@ -280,4 +280,252 @@ def _capture_report(cfg, counts, total, total_ms, skipped, smoke_results,
     return "\n".join(lines) + "\n"
 
 
-# --- benchmark (Task 9) ---
+# ── benchmark ────────────────────────────────────────────────────────────────
+
+def _build_benchmark_cases(cfg: BenchmarkConfig):
+    g_args = daxgen.build_treatas_args(cfg.global_filters)
+    g_frag = daxgen.filter_fragment(g_args)
+    x_args = daxgen.build_treatas_args(cfg.cross_product_value_filters)
+    x_frag = daxgen.filter_fragment(x_args)
+    cases = []
+    n = 0
+    for m in cfg.measures:
+        ref = f"[{m}]"
+        n += 1
+        cases.append((f"b{n:04d}", m, "grand_total",
+                      daxgen.build_benchmark_grand_total(ref, g_args)))
+        for label, col in cfg.single_slice_dimensions.items():
+            n += 1
+            cases.append((f"b{n:04d}", m, label,
+                          daxgen.build_benchmark_slice(col, g_frag, ref,
+                                                       cfg.max_rows_per_context)))
+        if cfg.cross_product_columns:
+            n += 1
+            cases.append((f"b{n:04d}", m,
+                          daxgen.cross_product_label(cfg.cross_product_columns),
+                          daxgen.build_benchmark_cross_product(
+                              cfg.cross_product_columns, g_frag, x_frag, ref,
+                              cfg.max_rows_per_context)))
+    return cases
+
+
+def _distinct_values(columns, rows) -> int:
+    """Distinct count over the LAST column (the Result column by construction)."""
+    if not columns or not rows:
+        return 0
+    last = columns[-1]
+    return len({str(r[last]) if r[last] is not None else "__NULL__" for r in rows})
+
+
+def _false_fast(timing_rows):
+    """distinct_values==1 with row_count>1 on a non-grand-total context means
+    the dimension isn't filtering the measure (no relationship path)."""
+    return [t for t in timing_rows
+            if t["status"] == "ok" and t["context"] != "grand_total"
+            and t.get("distinct_values") == 1 and t["row_count"] > 1]
+
+
+def run_benchmark(cfg: BenchmarkConfig) -> int:
+    import csv
+
+    out_dir = Path(cfg.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    conn_str = resolve_connection(cfg.connection.connection_string, cfg.connection.port)
+
+    if not cfg.single_slice_dimensions and not cfg.cross_product_columns:
+        print("WARNING: no dimensions defined — only grand_total will be tested.")
+
+    cases = _build_benchmark_cases(cfg)
+
+    timeout_log: list[str] = []
+    error_log: list[str] = []
+    skipped, smoke_results = set(), {}
+    if cfg.skip_on_smoke_failure:
+        # Benchmark smoke uses the bare measure ref (no global-filter wrap) — .csx parity.
+        skipped, smoke_results = _run_smoke(
+            conn_str, list(dict.fromkeys(cfg.measures)), cfg,
+            lambda m: f"[{m}]", timeout_log)
+
+    ser.write_testplan(out_dir / f"{cfg.label}-testplan.json", cfg.label,
+                       [{"test_id": i, "measure": m, "context": c, "dax": d}
+                        for i, m, c, d in cases])
+
+    timing_rows = []
+    counts = {"ok": 0, "error": 0, "timeout": 0, "skipped": 0, "aborted_memory": 0}
+    total = min(DIAG_TEST_CAP, len(cases)) if cfg.diagnostic_mode else len(cases)
+    run_start = time.monotonic()
+    memory_aborted = False
+
+    for i in range(total):
+        test_id, measure, context, dax = cases[i]
+
+        if not memory_aborted and is_memory_critical(cfg.memory_threshold_pct):
+            memory_aborted = True  # benchmark aborts immediately (no settle) — .csx parity
+            for j in range(i, total):
+                a_id, a_m, a_c, _ = cases[j]
+                counts["aborted_memory"] += 1
+                timing_rows.append({"test_id": a_id, "measure": a_m, "context": a_c,
+                                    "status": "aborted_memory", "row_count": 0,
+                                    "duration_ms": 0, "distinct_values": 0})
+            break
+
+        if measure in skipped:
+            counts["skipped"] += 1
+            timing_rows.append({"test_id": test_id, "measure": measure,
+                                "context": context, "status": "skipped",
+                                "row_count": 0, "duration_ms": 0, "distinct_values": 0})
+            continue
+
+        start = time.monotonic()
+        res = execute_dax(conn_str, "EVALUATE " + dax, cfg.query_timeout_ms,
+                          cfg.memory_threshold_pct)
+        elapsed = int((time.monotonic() - start) * 1000)
+
+        if res.status == "ok":
+            counts["ok"] += 1
+            rows = res.rows or []
+            timing_rows.append({"test_id": test_id, "measure": measure,
+                                "context": context, "status": "ok",
+                                "row_count": len(rows), "duration_ms": elapsed,
+                                "distinct_values": _distinct_values(res.columns or [], rows)})
+        elif res.status == "timeout":
+            counts["timeout"] += 1
+            ttype = _timeout_type(res.error)
+            error_log.append(f"{test_id} | {measure} | {context}\n"
+                             f"  TIMEOUT ({ttype}) after {elapsed}ms "
+                             f"(limit: {cfg.query_timeout_ms}ms)\n  DAX: {dax}\n\n")
+            timeout_log.append(ser.timeout_log_entry(test_id, measure, context,
+                                                     elapsed, ttype, res.error or "", dax))
+            timing_rows.append({"test_id": test_id, "measure": measure,
+                                "context": context, "status": "timeout",
+                                "row_count": 0, "duration_ms": elapsed,
+                                "distinct_values": 0})
+        else:
+            counts["error"] += 1
+            error_log.append(ser.error_log_entry(test_id, measure, context, dax,
+                                                 res.error or "unknown error"))
+            timing_rows.append({"test_id": test_id, "measure": measure,
+                                "context": context, "status": "error",
+                                "row_count": 0, "duration_ms": elapsed,
+                                "distinct_values": 0})
+
+    total_ms = int((time.monotonic() - run_start) * 1000)
+
+    ser.write_timing_csv(out_dir / f"{cfg.label}-timing.csv", timing_rows,
+                         include_distinct=True)
+
+    with open(out_dir / f"{cfg.label}-config.csv", "w", encoding="utf-8",
+              newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["type", "label", "column", "values"])
+        for col, vals in cfg.global_filters.items():
+            w.writerow(["global_filter", "", col, "; ".join(vals)])
+        for label, col in cfg.single_slice_dimensions.items():
+            w.writerow(["single_slice", label, col, ""])
+        for col in cfg.cross_product_columns:
+            vals = "; ".join(cfg.cross_product_value_filters.get(col, [])) or "(all)"
+            w.writerow(["cross_product", "", col, vals])
+
+    if counts["error"] > 0:
+        (out_dir / f"{cfg.label}-errors.log").write_text("".join(error_log),
+                                                         encoding="utf-8")
+    if counts["timeout"] > 0 or skipped:
+        (out_dir / f"{cfg.label}-timeouts.log").write_text("".join(timeout_log),
+                                                           encoding="utf-8")
+
+    report = _benchmark_report(cfg, counts, total, total_ms, skipped, smoke_results,
+                               timing_rows, memory_aborted, out_dir)
+    top5 = [f"{t['duration_ms']}ms - {t['measure']} [{t['context']}]"
+            for t in sorted((t for t in timing_rows if t["status"] == "ok"),
+                            key=lambda t: -t["duration_ms"])[:5]]
+    is_clean = (counts["error"] == 0 and counts["timeout"] == 0
+                and counts["skipped"] == 0 and counts["aborted_memory"] == 0)
+    status = "All Passed" if is_clean else (
+        f"{counts['error']} errors / {counts['timeout']} timeouts / "
+        f"{counts['skipped']} skipped"
+        + (f" / {counts['aborted_memory']} aborted" if counts["aborted_memory"] else ""))
+    facts = [("Label", cfg.label), ("Status", status),
+             ("Tests", f"{counts['ok']} OK / {counts['error']} errors / "
+                       f"{counts['timeout']} timeouts / {total} total"),
+             ("Measures", str(len(cfg.measures))),
+             ("Duration", f"{total_ms / 60000:.1f} min")]
+    extra = [{"type": "TextBlock", "text": "Top 5 Slowest (ok only)",
+              "weight": "Bolder", "spacing": "Medium"},
+             {"type": "TextBlock", "text": "\n".join(top5), "wrap": True,
+              "fontType": "Monospace", "size": "Small"}] if top5 else None
+    warn = _send_teams_card(cfg.teams_webhook_url,
+                            _adaptive_card("PBI Measure Benchmark Complete", facts, extra))
+    if warn:
+        report += warn + "\n"
+
+    (out_dir / f"{cfg.label}-summary.txt").write_text(report, encoding="utf-8")
+    print(report)
+    return 0
+
+
+def _benchmark_report(cfg, counts, total, total_ms, skipped, smoke_results,
+                      timing_rows, memory_aborted, out_dir) -> str:
+    bar = "═" * 60
+    sub = "  " + "─" * 53
+    lines = [bar, "  Measure Benchmark Complete", bar,
+             f"  Label:      {cfg.label}",
+             f"  Measures:   {len(cfg.measures)}",
+             f"  Contexts:   1 grand_total + {len(cfg.single_slice_dimensions)} single-slice"
+             + (" + 1 cross-product" if cfg.cross_product_columns else ""),
+             f"  Test cases: {total}",
+             f"  OK:         {counts['ok']}",
+             f"  Errors:     {counts['error']}",
+             f"  Timeouts:   {counts['timeout']}",
+             f"  Skipped:    {counts['skipped']}"]
+    if counts["aborted_memory"]:
+        lines.append(f"  Aborted (memory): {counts['aborted_memory']}")
+    lines += [f"  Duration:   {total_ms / 60000:.1f} minutes",
+              f"  Timing CSV: {out_dir / (cfg.label + '-timing.csv')}",
+              f"  Timeout:    {cfg.query_timeout_ms}ms per query "
+              "(ADOMD direct, mid-query memory watchdog)"]
+    if cfg.global_filters:
+        lines.append(f"  Global filters: {len(cfg.global_filters)} applied (TREATAS)")
+    if cfg.max_rows_per_context > 0:
+        lines.append(f"  Row cap: TOPN({cfg.max_rows_per_context}) per context")
+    if cfg.cross_product_columns:
+        lines.append(f"  Cross-product columns: {len(cfg.cross_product_columns)}")
+        if cfg.cross_product_value_filters:
+            lines.append(f"  Cross-product value filters (TREATAS): "
+                         f"{len(cfg.cross_product_value_filters)} columns filtered")
+    if skipped:
+        lines.append(f"  Smoke test: {len(skipped)} measure(s) skipped")
+        lines += [f"    - {m}: {r}" for m, r in smoke_results.items()]
+    if memory_aborted:
+        lines.append(f"  ⚠ Run ABORTED due to memory threshold "
+                     f"({cfg.memory_threshold_pct}%)")
+    ok_rows = [t for t in timing_rows if t["status"] == "ok"]
+    if ok_rows:
+        lines += ["", "  Top 10 Slowest Queries (ok only):", sub]
+        for t in sorted(ok_rows, key=lambda t: -t["duration_ms"])[:10]:
+            lines.append(f"    {t['duration_ms']:>8}ms | {t['measure']} "
+                         f"[{t['context']}] ({t['row_count']} rows, "
+                         f"{t['distinct_values']} distinct)")
+        lines.append(sub)
+    timed_out = [t for t in timing_rows if t["status"] == "timeout"]
+    if timed_out:
+        lines += ["", f"  Timed Out Queries ({len(timed_out)}):", sub]
+        for t in timed_out[:20]:
+            lines.append(f"    {t['duration_ms']:>8}ms | {t['measure']} "
+                         f"[{t['context']}]  ← TIMEOUT ({cfg.query_timeout_ms}ms limit)")
+        if len(timed_out) > 20:
+            lines.append(f"    ... and {len(timed_out) - 20} more "
+                         f"(see {cfg.label}-timeouts.log)")
+        lines.append(sub)
+    flagged = _false_fast(timing_rows)
+    if flagged:
+        lines += ["", f"  False-Fast Warnings ({len(flagged)} test cases):",
+                  "  distinct_values=1 with row_count>1 — dimension may not "
+                  "filter this measure", sub]
+        for t in flagged[:15]:
+            lines.append(f"    {t['duration_ms']:>8}ms | {t['measure']} "
+                         f"[{t['context']}] ({t['row_count']} rows, 1 distinct)")
+        if len(flagged) > 15:
+            lines.append(f"    ... and {len(flagged) - 15} more (see CSV)")
+        lines.append(sub)
+    lines.append(bar)
+    return "\n".join(lines) + "\n"
