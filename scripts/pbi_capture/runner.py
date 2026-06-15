@@ -325,6 +325,23 @@ def _false_fast(timing_rows):
             and t.get("distinct_values") == 1 and t["row_count"] > 1]
 
 
+def _write_benchmark_xlsx(path, cfg, counts, total, total_ms, timing_rows,
+                          skipped, smoke_results, memory_aborted) -> str:
+    """Write the polished benchmark .xlsx (mirrors the regression report).
+    Optional and non-fatal — returns a one-line note for the summary report."""
+    try:
+        from .benchmark_report import write_benchmark_report
+        write_benchmark_report(path, cfg=cfg, counts=counts, total=total,
+                               total_ms=total_ms, timing_rows=timing_rows,
+                               skipped=skipped, smoke_results=smoke_results,
+                               memory_aborted=memory_aborted)
+        return f"  Report XLSX: {path}"
+    except ImportError:
+        return "  Report XLSX: skipped (pip install openpyxl to enable)"
+    except Exception as ex:  # never fail a completed run over the report
+        return f"  Report XLSX: failed ({ex})"
+
+
 def run_benchmark(cfg: BenchmarkConfig) -> int:
     import csv
 
@@ -433,8 +450,12 @@ def run_benchmark(cfg: BenchmarkConfig) -> int:
         (out_dir / f"{cfg.label}-timeouts.log").write_text("".join(timeout_log),
                                                            encoding="utf-8")
 
+    xlsx_note = _write_benchmark_xlsx(out_dir / f"{cfg.label}-report.xlsx", cfg,
+                                      counts, total, total_ms, timing_rows,
+                                      skipped, smoke_results, memory_aborted)
+
     report = _benchmark_report(cfg, counts, total, total_ms, skipped, smoke_results,
-                               timing_rows, memory_aborted, out_dir)
+                               timing_rows, memory_aborted, out_dir, xlsx_note)
     top5 = [f"{t['duration_ms']}ms - {t['measure']} [{t['context']}]"
             for t in sorted((t for t in timing_rows if t["status"] == "ok"),
                             key=lambda t: -t["duration_ms"])[:5]]
@@ -464,7 +485,7 @@ def run_benchmark(cfg: BenchmarkConfig) -> int:
 
 
 def _benchmark_report(cfg, counts, total, total_ms, skipped, smoke_results,
-                      timing_rows, memory_aborted, out_dir) -> str:
+                      timing_rows, memory_aborted, out_dir, xlsx_note="") -> str:
     bar = "═" * 60
     sub = "  " + "─" * 53
     lines = [bar, "  Measure Benchmark Complete", bar,
@@ -480,9 +501,11 @@ def _benchmark_report(cfg, counts, total, total_ms, skipped, smoke_results,
     if counts["aborted_memory"]:
         lines.append(f"  Aborted (memory): {counts['aborted_memory']}")
     lines += [f"  Duration:   {total_ms / 60000:.1f} minutes",
-              f"  Timing CSV: {out_dir / (cfg.label + '-timing.csv')}",
-              f"  Timeout:    {cfg.query_timeout_ms}ms per query "
-              "(ADOMD direct, mid-query memory watchdog)"]
+              f"  Timing CSV: {out_dir / (cfg.label + '-timing.csv')}"]
+    if xlsx_note:
+        lines.append(xlsx_note)
+    lines.append(f"  Timeout:    {cfg.query_timeout_ms}ms per query "
+                 "(ADOMD direct, mid-query memory watchdog)")
     if cfg.global_filters:
         lines.append(f"  Global filters: {len(cfg.global_filters)} applied (TREATAS)")
     if cfg.max_rows_per_context > 0:
