@@ -205,7 +205,8 @@ Good entries are reusable, non-obvious, specific, and validated. Skip generic DA
 You can run scripts directly in this project:
 
 - **Python scripts:** `python scripts/compare-snapshots.py before.json after.json`
-- **Schema generation:** `python scripts/bim_to_kb_markdown.py path/to/model.bim --output artifacts/model-schema/<name>.md`
+- **Schema generation (from a `.bim`):** `python scripts/bim_to_kb_markdown.py path/to/model.bim --output artifacts/model-schema/<name>.md`
+- **Live schema export (model open in PBI Desktop):** `python scripts/export_schema.py` — TE-free, via TOM (one-time setup: `python scripts/pbi_capture/provision_libs.py`)
 
 Write new scripts to `scripts/`. Write output files (reports, diffs, snapshots) to `output/`.
 
@@ -221,6 +222,8 @@ When the user provides a `.bim` file:
 
 1. Run `python scripts/bim_to_kb_markdown.py path/to/file.bim --output artifacts/model-schema/<name>.md` to generate the schema markdown
 2. Present a brief summary (table/measure/relationship counts, model name) for review
+
+**Live alternative (model open, no `.bim` file):** run `python scripts/export_schema.py` to export an open Power BI Desktop model's schema directly via TOM — no Tabular Editor required. It serializes the live model to `.bim` and runs the same parser, producing the same `artifacts/model-schema/model-schema-<slug>.md`. One-time prerequisite: `python scripts/pbi_capture/provision_libs.py` (downloads the Analysis Services client DLLs into `libs/`).
 
 Generated schema markdown is a documentation/cache snapshot — do NOT read it wholesale after onboarding. Use `powerbi-context-mode` (`ctx_index` + `ctx_search`) for targeted retrieval. When live TE CLI / TOM is available, prefer it as the source of truth.
 
