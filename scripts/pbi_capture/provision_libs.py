@@ -69,7 +69,10 @@ def extract_dlls(nupkg_bytes: bytes, runtime: str) -> dict:
     out = {}
     for name in zf.namelist():
         if name.startswith(prefix) and name.lower().endswith(".dll"):
-            out[name[len(prefix):]] = zf.read(name)
+            rel = name[len(prefix):]
+            if "/" in rel:
+                continue  # skip localized satellites: lib/<tfm>/<lang>/*.resources.dll
+            out[rel] = zf.read(name)
     if not out:
         raise ProvisionError(f"no DLLs under {prefix}")
     return out

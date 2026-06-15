@@ -13,6 +13,7 @@ def _fixture_nupkg() -> bytes:
         zf.writestr("lib/net45/A.dll", b"netfx-A")
         zf.writestr("lib/net45/B.dll", b"netfx-B")
         zf.writestr("lib/net45/A.xml", b"<doc/>")        # non-dll, ignored
+        zf.writestr("lib/net45/de/A.resources.dll", b"loc-de")  # localized satellite, ignored
         zf.writestr("lib/net6.0/A.dll", b"core-A")
         zf.writestr("[Content_Types].xml", b"<x/>")        # non-lib, ignored
     return buf.getvalue()

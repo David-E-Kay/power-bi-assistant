@@ -16,3 +16,9 @@ output/
 
 # Graphify local knowledge graph outputs
 graphify-out/
+
+# NuGet-provisioned DLLs (downloaded at runtime by provision_libs.py)
+libs/
+
+# Generated model-schema snapshots (regenerable cache; keep the explanatory README)
+artifacts/model-schema/model-schema-*.md

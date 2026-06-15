@@ -24,13 +24,24 @@ class ClrBootError(RuntimeError):
     which means the DLL is simply absent."""
 
 
+_LIBS_DIR = Path(__file__).resolve().parents[2] / "libs"
+
 _DLL_CANDIDATES = [
     os.environ.get("ADOMD_DLL_PATH", ""),
+    str(_LIBS_DIR / "Microsoft.AnalysisServices.AdomdClient.dll"),
     r"C:\Program Files\DAX Studio\bin\Microsoft.AnalysisServices.AdomdClient.dll",
     r"C:\Program Files\Microsoft Power BI Desktop\bin\Microsoft.AnalysisServices.AdomdClient.dll",
 ]
 
+_TOM_CANDIDATES = [
+    os.environ.get("TOM_DLL_PATH", ""),
+    str(_LIBS_DIR / "Microsoft.AnalysisServices.Tabular.dll"),
+    r"C:\Program Files\DAX Studio\bin\Microsoft.AnalysisServices.Tabular.dll",
+    r"C:\Program Files\Microsoft Power BI Desktop\bin\Microsoft.AnalysisServices.Tabular.dll",
+]
+
 _loaded = False
+_tom_loaded = False
 
 
 def find_adomd_dll() -> Path:
@@ -64,3 +75,28 @@ def ensure_adomd() -> None:
             "compatible with the netfx runtime."
         ) from ex
     _loaded = True
+
+
+def find_tom_dll() -> Path:
+    for cand in _TOM_CANDIDATES:
+        if cand and Path(cand).is_file():
+            return Path(cand)
+    raise FileNotFoundError(
+        "Microsoft.AnalysisServices.Tabular.dll not found. Checked: "
+        + " | ".join(c for c in _TOM_CANDIDATES if c)
+        + ". Run `python -m pbi_capture.provision_libs`, or set TOM_DLL_PATH.")
+
+
+def ensure_tom() -> None:
+    """Idempotent: ensure the CLR is initialized (via ensure_adomd) and load the
+    TOM (Microsoft.AnalysisServices.Tabular) assembly. Reuses the already-loaded
+    runtime — no second pythonnet.load()."""
+    global _tom_loaded
+    if _tom_loaded:
+        return
+    ensure_adomd()  # inits the runtime + appends a probe dir to sys.path
+    dll = find_tom_dll()
+    import clr
+    sys.path.append(str(dll.parent))  # probe dir may already be on sys.path; harmless dup
+    clr.AddReference("Microsoft.AnalysisServices.Tabular")
+    _tom_loaded = True
