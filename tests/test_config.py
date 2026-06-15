@@ -93,6 +93,24 @@ def test_validate_rejects_unsafe_test_id(tmp_path):
         validate_capture(load_config(_write(tmp_path, doc)))
 
 
+def test_validate_rejects_topn_cap_on_capture(tmp_path):
+    doc = dict(CAPTURE_DOC, max_rows_per_context=5)
+    with pytest.raises(ConfigError, match="max_rows_per_context"):
+        validate_capture(load_config(_write(tmp_path, doc)))
+
+
+def test_validate_allows_zero_cap_on_capture(tmp_path):
+    doc = dict(CAPTURE_DOC, max_rows_per_context=0)
+    validate_capture(load_config(_write(tmp_path, doc)))  # no raise
+
+
+def test_validate_benchmark_allows_topn_cap(tmp_path):
+    # Row caps are legal for benchmark (timing-only) — regression-only ban.
+    doc = {"workflow": "benchmark", "label": "b", "measures": ["M"],
+           "max_rows_per_context": 5}
+    validate_benchmark(load_config(_write(tmp_path, doc)))  # no raise
+
+
 def test_validate_benchmark_filter_subset(tmp_path):
     doc = {"workflow": "benchmark", "label": "b", "measures": ["M"],
            "cross_product_columns": ["'A'[B]"],

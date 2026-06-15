@@ -139,6 +139,14 @@ def _validate_measure_name(name: str) -> None:
 def validate_capture(cfg: CaptureConfig) -> None:
     if not cfg.label:
         raise ConfigError("label must be non-empty")
+    if cfg.max_rows_per_context != 0:
+        raise ConfigError(
+            "max_rows_per_context must be 0 for regression capture (got "
+            f"{cfg.max_rows_per_context}). A TOPN row cap truncates "
+            "dimension-combination values — a delta in a dropped row becomes a "
+            "silent false-pass — and TOPN without ORDER BY returns an unstable "
+            "row set across runs. For a fast smoke run use diagnostic_mode "
+            "(caps test count, not rows). Row caps are a benchmark-only knob.")
     if not cfg.tests:
         raise ConfigError("capture config has no tests")
     seen = set()
