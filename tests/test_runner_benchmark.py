@@ -58,3 +58,24 @@ def test_false_fast_detection():
     ]
     flagged = runner._false_fast(timing)
     assert [t["test_id"] for t in flagged] == ["b1"]
+
+
+def test_report_launch_uri_none_when_missing(tmp_path):
+    # When the report wasn't written (e.g. openpyxl absent), the toast must be
+    # non-clickable rather than pointing Explorer at a missing file.
+    missing = tmp_path / "absent-report.xlsx"
+    assert runner._report_launch_uri(missing) is None
+
+
+def test_report_launch_uri_set_when_present(tmp_path):
+    present = tmp_path / "present-report.xlsx"
+    present.write_text("x")
+    assert runner._report_launch_uri(present) == present.as_uri()
+
+
+def test_status_emoji_clean_is_check():
+    assert runner._status_emoji(True) == "✅"
+
+
+def test_status_emoji_not_clean_is_warning():
+    assert runner._status_emoji(False) == "⚠️"

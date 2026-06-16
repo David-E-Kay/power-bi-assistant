@@ -351,6 +351,20 @@ def _write_benchmark_xlsx(path, cfg, counts, total, total_ms, timing_rows,
         return f"  Report XLSX: failed ({ex})"
 
 
+def _report_launch_uri(report_path: Path):
+    """file:// URI for the benchmark report toast, or None when the report
+    wasn't written (e.g. openpyxl missing). None keeps the toast non-clickable
+    instead of pointing Explorer at a missing file."""
+    return report_path.as_uri() if report_path.exists() else None
+
+
+def _status_emoji(is_clean: bool) -> str:
+    """Toast-title status glyph, matching the capture path's convention.
+    Used only in the desktop-toast title — the benchmark `status` string
+    (shared with the Teams card) stays emoji-free."""
+    return "✅" if is_clean else "⚠️"
+
+
 def run_benchmark(cfg: BenchmarkConfig) -> int:
     import csv
 
@@ -487,14 +501,15 @@ def run_benchmark(cfg: BenchmarkConfig) -> int:
                             _adaptive_card("PBI Measure Benchmark Complete", facts, extra))
     if warn:
         report += warn + "\n"
+    report_path = (out_dir / f"{cfg.label}-report.xlsx").resolve()
     toast_warn = send_desktop_toast(
-        f"PBI Benchmark — {status}",
+        f"PBI Benchmark — {_status_emoji(is_clean)} {status}",
         [f"Label: {cfg.label}",
          f"Tests: {counts['ok']} OK / {counts['error']} err / "
          f"{counts['timeout']} timeout / {total} total",
          f"Measures: {len(cfg.measures)}",
          f"Duration: {total_ms / 60000:.1f} min"],
-        launch_uri=(out_dir / f"{cfg.label}-report.xlsx").resolve().as_uri())
+        launch_uri=_report_launch_uri(report_path))
     if toast_warn:
         report += toast_warn + "\n"
 
