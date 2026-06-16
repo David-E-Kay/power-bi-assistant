@@ -201,11 +201,13 @@ Establish the model context using the best available source, in priority order:
 **Option 1 — `.bim` file (uploaded or previously parsed):**
 Use each measure's `measureTable` (home table) as its domain. Group by distinct home table name — these become the domain buckets. If the model uses display folders, use the top-level folder name instead. Present the derived domain list to the user — they may want to merge small tables (e.g., combine two closely related tables) or rename buckets.
 
-**Option 2 — MCP server (`powerbi-modeling-mcp.exe`):**
-Before using this path, confirm the MCP server is installed and connected. If uncertain, ask: "Do you have the Power BI modeling MCP server running? You can check by running `Get-Process powerbi-modeling-mcp` in a terminal, or by looking for it in your Claude Code MCP settings." If confirmed, use the MCP `model_operations` / `measure_operations` tools to enumerate all measures and their home tables — then derive domains the same way as Option 1.
+**Option 2 — Live TOM export (TE-free):**
+Run `python scripts/export_schema.py` to serialize an open Power BI Desktop model via TOM into the same schema markdown, then derive domains the same way as Option 1. This is the preferred live-capture path when no `.bim` is on hand (one-time setup: `python scripts/pbi_capture/provision_libs.py`).
 
-**Option 3 — Tabular Editor CLI (future, not yet available):**
-TE CLI will support headless read operations against Power BI models without a `.bim` file, enabling automated measure/column enumeration. When available, it will be equivalent to Option 1 for domain derivation. For now, note this as a future path and fall back to Option 4.
+**Option 3 — Tabular Editor (desktop or CLI):**
+If the live TOM export isn't usable, use Tabular Editor to read the model and enumerate measures and their home tables — then derive domains the same way as Option 1.
+
+> **Not used here: the Power BI modeling MCP.** Regression testing needs broad model context, and MCP is costly for large `.bim` enumeration — deriving domains over MCP would burn context for no benefit over the cheaper snapshot/TOM paths above. (This is a workflow-specific exclusion; MCP remains fine for targeted inspection, discovery, and validation elsewhere.)
 
 **Option 4 — Ask the user:**
 If none of the above are available, ask: "What are the main subject areas in your model? (e.g., Sales, Inventory, Customers) — I'll use these to group the measure list." Once the user describes the domains, use **semantic interpretation** (not literal keyword/string matching) to propose which measures belong to each domain, then confirm. Naming conventions vary widely — a measure named "Avg Days to Close" may belong to a "Sales" domain even though those exact words don't appear in the name.

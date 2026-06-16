@@ -67,6 +67,7 @@ Never modify marketplace plugin files in `~/.claude/plugins/cache/`.
 ## User Working Style
 
 - **Automation over manual edits.** Always prefer Tabular Editor C# scripts for model changes. The user runs scripts in TE3 against a local PBIP or via XMLA to Fabric. Never suggest "open Power BI Desktop and click…" when a script can do it.
+- **TE-first semantic model mutations.** For semantic model mutations that affect DAX, relationships, object structure, calculation groups, bulk metadata, or production models, generate a Tabular Editor C# script or `te`-based repeatable operation first. Prefer this path because it is auditable, repeatable, cheaper to rerun, and reviewable/undoable in Tabular Editor before commit. Use MCP only for inspection, metadata discovery, validation, or explicitly approved low-risk single-object edits.
 - **Incremental validation.** The user prefers configuration toggles and phased rollouts. Present changes in reviewable chunks, not monolithic scripts.
 - **Copy-paste-ready DAX.** When presenting DAX measures, include all USERELATIONSHIP, CROSSFILTER, and KEEPFILTERS lines — never abbreviate with "add your filters here." The user copies directly into TE or the service.
 - **Trace-driven optimization.** Performance work starts from DAX Studio traces with Server Timings. Always ask for the SE/FE split and row counts before proposing optimizations.

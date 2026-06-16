@@ -130,6 +130,8 @@ Produce: ETL/source changes required, each relationship change with rationale, a
 
 Use `/c-sharp-scripting` (see handoff map) for TOM relationship CRUD primitives. This phase owns only the orchestration patterns unique to topology refactors.
 
+Default mutation path: C# / TOM or `te` automation. Do not use MCP to apply topology, DAX, calculation group, or bulk metadata changes unless the user explicitly approves a low-risk single-object edit.
+
 ### 4.1 Bulk DAX updates with regex
 
 The centerpiece C# pattern for removing USERELATIONSHIP/CROSSFILTER calls including surrounding commas:
