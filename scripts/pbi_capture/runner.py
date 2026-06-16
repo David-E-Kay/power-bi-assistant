@@ -12,6 +12,7 @@ from . import serialization as ser
 from .config import BenchmarkConfig, CaptureConfig
 from .discovery import resolve_connection
 from .executor import execute_dax
+from .notify import send_desktop_toast
 from .watchdog import is_memory_critical
 
 DIAG_TEST_CAP = 8
@@ -234,6 +235,14 @@ def run_capture(cfg: CaptureConfig) -> int:
                             _adaptive_card("PBI Regression Test Complete", facts))
     if warn:
         report += warn + "\n"
+    toast_warn = send_desktop_toast(
+        f"PBI Regression — {status}",
+        [f"Label: {cfg.label}",
+         f"Tests: {counts['ok']} OK / {counts['error']} err / "
+         f"{counts['timeout']} timeout / {total} total",
+         f"Duration: {total_ms / 60000:.1f} min"])
+    if toast_warn:
+        report += toast_warn + "\n"
 
     (out_dir / f"{cfg.label}-summary.txt").write_text(report, encoding="utf-8")
     print(report)
@@ -478,6 +487,16 @@ def run_benchmark(cfg: BenchmarkConfig) -> int:
                             _adaptive_card("PBI Measure Benchmark Complete", facts, extra))
     if warn:
         report += warn + "\n"
+    toast_warn = send_desktop_toast(
+        f"PBI Benchmark — {status}",
+        [f"Label: {cfg.label}",
+         f"Tests: {counts['ok']} OK / {counts['error']} err / "
+         f"{counts['timeout']} timeout / {total} total",
+         f"Measures: {len(cfg.measures)}",
+         f"Duration: {total_ms / 60000:.1f} min"],
+        launch_uri=(out_dir / f"{cfg.label}-report.xlsx").resolve().as_uri())
+    if toast_warn:
+        report += toast_warn + "\n"
 
     (out_dir / f"{cfg.label}-summary.txt").write_text(report, encoding="utf-8")
     print(report)
