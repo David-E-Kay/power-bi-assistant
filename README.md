@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/David-E-Kay/power-bi-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/David-E-Kay/power-bi-assistant/actions/workflows/ci.yml)
 
-A [Claude Code](https://claude.com/claude-code) workspace that turns Claude into a focused assistant for Power BI semantic-model work — DAX optimization, data modeling, performance tuning, regression testing, and schema documentation.
+A [Claude Code](https://claude.com/claude-code) workspace that turns Claude into a focused assistant for Power BI semantic-model work — DAX optimization, data modeling, performance tuning, regression testing, model refactoring, and schema documentation.
 
 The project ships:
 
@@ -10,6 +10,19 @@ The project ships:
 - **Project skills** (`.claude/skills/`) for `.bim` parsing, measure benchmarking, regression testing, model-refactor strategy, context-mode retrieval over large artifacts, and Confluence caching.
 - **A curated knowledge base** (`knowledge/`) of validated DAX patterns and team modeling standards, extended per-model as you onboard models.
 - **Python + C# automation** (`scripts/`) — including a **Tabular-Editor-free** path to export a live model's schema and run DAX against an open Power BI Desktop instance, using the Analysis Services client libraries provisioned straight from NuGet.
+
+## An end-to-end model workflow
+
+The skills are built to **chain into one loop**, not just stand alone:
+
+> author / optimize DAX → **benchmark** → **regression-test** → **refactor topology** → re-validate
+
+- **Authoring & optimization** — the data-goblin `semantic-models:dax` skill plus the DAX review checklist in `CLAUDE.md`.
+- **Benchmarking** — [`measure-benchmarking`](.claude/skills/measure-benchmarking/SKILL.md) profiles a measure set to find the slowest queries.
+- **Regression testing** — [`regression-testing`](.claude/skills/regression-testing/SKILL.md) proves a change didn't alter results.
+- **Refactoring** — [`refactor-strategy`](.claude/skills/refactor-strategy/SKILL.md) is the **orchestrator**: it diagnoses a topology bottleneck and **delegates to the data-goblin skills** to assess and execute the fix — `semantic-models:dax` for the trace / SE–FE decision, `tabular-editor:bpa-rules` to flag bidirectional / inactive / unused relationships, and `tabular-editor:c-sharp-scripting` for the TOM relationship and DAX edits — then hands back to `regression-testing` to verify parity.
+
+In short: the data-goblin **`power-bi-agentic-development`** plugin supplies the *targeted, single-domain* skills (DAX, TMDL, BPA, C# scripting, Fabric); this project adds the *cross-skill workflows* (benchmarking, regression testing, refactor orchestration) and the model-learning knowledge base on top.
 
 ## Prerequisites
 
