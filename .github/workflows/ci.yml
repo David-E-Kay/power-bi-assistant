@@ -1,0 +1,26 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  fast-suite:
+    # Windows runner is required: the capture engine reads total RAM via the
+    # Windows-only GlobalMemoryStatusEx ctypes call (scripts/pbi_capture/watchdog.py),
+    # and the whole toolchain targets Power BI Desktop on Windows. The `live` tests
+    # (which need an open Power BI Desktop model) are excluded — they can't run on a
+    # hosted runner.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run fast test suite
+        run: python -m pytest -m "not live"

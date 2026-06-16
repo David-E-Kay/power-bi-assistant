@@ -7,6 +7,16 @@ description: "Use this skill when the user wants to restructure a Power BI seman
 
 Topology refactor orchestrator + C# codegen for coordinated relationship/DAX cleanup. Model-agnostic — adapt to the model at hand.
 
+## Requires the data-goblin plugin
+
+This skill is an **orchestrator** — it delegates the real work to specialist plugin skills and **does not function without the data-goblin `power-bi-agentic-development` plugin** (install it from the Claude Code marketplace). Hard dependencies:
+
+- **REQUIRED:** `semantic-models:dax` — trace capture, SE/FE split, the MDL001-010 topology decision (Phase 1)
+- **REQUIRED:** `tabular-editor:bpa-rules` — authoring/running rules to flag bidir / inactive / unused relationships (Phase 2)
+- **REQUIRED:** `tabular-editor:c-sharp-scripting` — TOM relationship CRUD and bulk DAX edits (Phase 4)
+
+Model **mutation** (relationship CRUD, measure rewrites) legitimately needs TOM via TE C# scripting — which is why this skill keeps its C# codegen and is **not** a Python rewrite. The TE-free Python path (`scripts/capture_snapshot.py`) is read-only query execution, used only for Phase 5 validation via the `regression-testing` skill.
+
 ## Specialist Handoff Map
 
 When a phase below says "use [skill] for X", **invoke it via the `Skill` tool and follow it** — do not paraphrase the specialist's workflow inline. The handoff table is the contract.

@@ -1,7 +1,7 @@
 """Provision the Analysis Services client DLLs into repo-local libs/ from NuGet.
 
-Pure download/extract — no .NET SDK or nuget.exe required. See
-docs/superpowers/plans/2026-06-14-nuget-client-libs-spec.md.
+Pure download/extract — no .NET SDK or nuget.exe required. See the README
+("Setup") for the one-time provisioning step.
 """
 import io
 import re

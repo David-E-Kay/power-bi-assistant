@@ -5,7 +5,7 @@ Usage:
     python scripts/capture_snapshot.py --config output/baseline.config.json
     python scripts/capture_snapshot.py --config c.json --label refactored --port 51234
 
-Config schema: docs/superpowers/plans/2026-06-10-te-free-capture-spec.md.
+Config schema: docs/config-schema.md.
 Env overrides (SNAPSHOT_LABEL, MODEL_NAME, OUTPUT_DIR, QUERY_TIMEOUT_MS, ...)
 match the retired capture-snapshot.csx. Exit codes: 0 = run completed
 (per-test errors are data), 2 = fatal (config/connection/CLR failure).

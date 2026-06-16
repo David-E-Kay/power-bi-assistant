@@ -2,8 +2,7 @@
 
 Connects to the running msmdsrv instance, serializes the model to the same
 .bim/TMSL JSON Tabular Editor would export, and feeds it into the existing
-bim_to_kb_markdown parser (unchanged). See
-docs/superpowers/plans/2026-06-14-tom-schema-export-spec.md.
+bim_to_kb_markdown parser (unchanged).
 """
 import re
 from pathlib import Path

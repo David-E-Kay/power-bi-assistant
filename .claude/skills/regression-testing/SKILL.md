@@ -1,11 +1,11 @@
 ---
 name: regression-testing
-description: "Use this skill when the user asks to 'test a refactor', 'regression test', 'validate model changes', 'compare before and after', 'capture baseline', 'snapshot measures', 'diff results', 'ensure parity', or any request involving verifying that a Power BI semantic model produces identical results after DAX edits, relationship changes, calc column additions, or structural refactors. Covers the full lifecycle: change scope analysis, measure tiering (including random sampling and domain/type filtering), test case generation (single-dimension and cross-product contexts with per-group TOPN), baseline capture, post-refactor capture, and comparison. Uses capture-snapshot.csx as a tested template — only the test case list and dimension map are generated on demand; the DAX construction block is baked into the template."
+description: "Use this skill when the user asks to 'test a refactor', 'regression test', 'validate model changes', 'compare before and after', 'capture baseline', 'snapshot measures', 'diff results', 'ensure parity', or any request involving verifying that a Power BI semantic model produces identical results after DAX edits, relationship changes, calc column additions, or structural refactors. Covers the full lifecycle: change scope analysis, measure tiering (including random sampling and domain/type filtering), test case generation (single-dimension and cross-product contexts), baseline capture, post-refactor capture, and comparison. Drives the TE-free Python runner: Claude authors a JSON config consumed by scripts/capture_snapshot.py (the stable capture engine lives in scripts/pbi_capture/ and is never edited per session). The retired TE3 .csx template remains available on request as a legacy alternative."
 ---
 
 # Regression Testing for Power BI Model Refactors
 
-A conversational skill that guides Claude through planning, generating, and executing regression tests for Power BI semantic model changes. The capture script uses `scripts/capture-snapshot.csx` as a tested template (read-only — copy to `output/{label}.csx` per session, edit the copy). Only the test case list (`testLines`) and dimension map (`groupByColumns`) are generated on demand based on the specific model, change scope, and user confirmation. The DAX construction block is baked into the template and handles single-dimension, cross-product, and TOPN-per-group patterns automatically based on the `groupByColumns` entries. The Python comparison script is generated fresh each time.
+A conversational skill that guides Claude through planning, generating, and executing regression tests for Power BI semantic model changes. Capture runs on the TE-free Python path: `python scripts/capture_snapshot.py --config output/{label}.config.json`. The stable capture engine lives in the `scripts/pbi_capture/` package and is **never edited per session** — the only per-session artifact is a JSON config file (pure data) that Claude authors from the specific model, change scope, and user confirmation. The config lists the test cases (`tests`) and the dimension map (`group_by_columns`); the engine builds the DAX (single-dimension and cross-product `SUMMARIZECOLUMNS`) at runtime, which avoids cross-language string-escaping issues. Comparison uses the stable `scripts/compare-snapshots.py`, unchanged. The retired TE3 `.csx` template is still in the repo and can be emitted on request (see "Legacy TE3 output (on request)").
 
 ## When to Use This Skill
 
@@ -26,7 +26,7 @@ Do NOT use for:
 1. **Never generate test scripts without understanding the change.** The test suite is shaped entirely by what changed. A bridge refactor needs different tests than a measure rewrite.
 2. **Always confirm with the user.** Every decision point — change scope, measure tiers, filter contexts, edge cases — requires user confirmation before generating artifacts.
 3. **Zero tolerance by default.** Baseline and refactored models are offline copies of the same data. Results must match exactly. BLANK ≠ 0 ≠ null — these are semantically distinct in DAX and must be compared as such.
-4. **Use the tested template.** The capture script at `scripts/capture-snapshot.csx` is a proven, working template (read-only — copy to `output/{label}.csx` per session). Claude MUST use it as the base and only replace two sections on demand: `testLines` and `groupByColumns`. The DAX construction block is baked into the template and handles single-dimension, cross-product, and TOPN-per-group patterns automatically. All other code — helpers, execution engine, JSON serialization, error handling, diagnostic mode, Teams webhook, summary report — is copied verbatim from the template. Do NOT regenerate these sections from scratch; doing so risks introducing bugs in code that has already been tested and validated.
+4. **Use the stable engine; author only the config.** The capture engine at `scripts/pbi_capture/` is proven, tested code and is **never edited per session**. Claude's only per-session artifact is the JSON config (`output/{label}.config.json`) — specifically the `tests` list and `group_by_columns` map. The engine builds the DAX (single-dimension and cross-product `SUMMARIZECOLUMNS`), runs it under the safety stack, and serializes the snapshot automatically. All other behavior — helpers, execution engine, JSON serialization, error handling, diagnostic mode, summary report — lives in the package. Do NOT fork or reimplement that logic; it has already been tested and validated.
 
 ---
 
@@ -271,51 +271,35 @@ The filter contexts to test depend on **which dimensions are connected to the af
 - Report pages use multi-slicer layouts where dimensions interact
 - The user explicitly requests it
 
-**Cross-product cardinality warning:** Cross-products can cause OutOfMemoryException in TE3 when high-cardinality dimensions are involved (e.g., a name column × Month × another name column produces millions of rows serialized to JSON). Rules:
+**Cross-product cardinality warning:** Cross-products can exhaust engine memory when high-cardinality dimensions are involved (e.g., a name column × Month × another name column produces millions of rows serialized to JSON). Rules:
 - **Always exclude high-cardinality dimensions** (individual name/ID columns, etc.) from cross-products — test those as single-dimension queries
 - **Only combine low-cardinality dimensions** (status flags, fiscal year, category/type fields — typically 2–20 distinct values)
 - Maximum recommended cross-product: 3 low-cardinality dimensions
 - When in doubt, ask the user about dimension cardinality
 
-**Cross-product convention in the template:**
+**Cross-product convention in the config:**
 
-Cross-product context labels use a `_x_` separator in the test case ID (e.g., `by_dim1_x_year`). In the `groupByColumns` dictionary, the corresponding value uses a `|` pipe separator between DAX column references:
+Cross-product context labels use a `_x_` separator in the context name (e.g., `by_dim1_x_year`). In the `group_by_columns` map, the corresponding value uses a `|` pipe separator between DAX column references:
 
-```csharp
-// Generic form — replace with columns from your model:
-{ "by_dim1_x_year", "'[YourDimTable]'[LowCardinalityColumn]|'Date'[Year]" },
-{ "by_dim1_x_year_x_status", "'[YourDimTable]'[LowCardinalityColumn]|'Date'[Year]|'[StatusTable]'[StatusColumn]" },
-// Example:
-// { "by_flag_x_year", "'Table A'[Column A]|'Date'[Start of Year]" },
+```json
+"group_by_columns": {
+  "by_dim1_x_year": "'[YourDimTable]'[LowCardinalityColumn]|'Date'[Year]",
+  "by_dim1_x_year_x_status": "'[YourDimTable]'[LowCardinalityColumn]|'Date'[Year]|'[StatusTable]'[StatusColumn]"
+}
 ```
 
-The DAX construction block splits on `|` and builds the appropriate SUMMARIZECOLUMNS with multiple grouping columns.
+The engine splits on `|` and builds a single `SUMMARIZECOLUMNS` with multiple grouping columns.
 
-#### TOPN Behavior: Single vs. Cross-Product
+#### Row caps (`max_rows_per_context`) are rejected for regression capture
 
-When `maxRowsPerContext > 0`:
+For regression capture, `max_rows_per_context` **must be 0** — the Python config validator (`validate_capture` in `scripts/pbi_capture/config.py`) hard-rejects any other value. A row cap is unsafe for value comparison:
 
-- **Single-dimension contexts**: TOPN wraps the entire SUMMARIZECOLUMNS, returning the top N rows overall. This matches the existing v8 template behavior.
+- A `TOPN` cap silently truncates dimension combinations, so a delta in a dropped row becomes an undetectable **false pass**.
+- The generated `TOPN(N, …)` has no `ORDER BY`, so the kept row set is **unstable across the baseline vs. refactored captures** — you'd diff different rows.
 
-- **Cross-product contexts**: TOPN applies **per partition group** — the first column in the `|`-separated list is the partition column, and TOPN is applied within each partition value. This ensures the test exercises the measure under each value of the primary grouping dimension rather than just returning the top N rows overall (which might all come from one partition value).
+The cap exists only as a *benchmark* knob (timing, not values), where truncation is acceptable. For a fast regression smoke run, use **diagnostic mode** (`--diagnostic` flag or `"diagnostic_mode": true`), which caps the *test count* (first 8 tests), not the rows. So in capture, every cross-product context is a plain `SUMMARIZECOLUMNS` over all its grouping columns — no `TOPN`, no `GENERATE`.
 
-  **DAX pattern for TOPN-per-group:**
-  ```dax
-  GENERATE(
-      VALUES('[PartitionDimTable]'[PartitionColumn]),
-      TOPN(5,
-          SUMMARIZECOLUMNS(
-              '[DetailDimTable]'[DetailColumn],
-              "Result", [Measure]
-          )
-      )
-  )
-  // Example: partition = 'Table A'[Column A], detail = 'Date'[Start of Year]
-  ```
-
-  The first column (the partition column) serves as the outer loop. For each distinct value, TOPN returns the top N rows from the remaining dimensions. This validates that the combined filter context produces correct results across different partition slices.
-
-  **Column ordering matters** — when defining cross-product entries in `groupByColumns`, place the lower-cardinality / more-important-to-partition-by column first. Example: `StatusFlag (2 values) | Year (5 values)` → partitions by StatusFlag, top N years within each.
+**Column ordering still matters for readability** — when defining cross-product entries in `group_by_columns`, place the lower-cardinality column first (e.g., `StatusFlag (2 values) | Year (5 values)`) so the serialized result groups naturally.
 
 Ask the user:
 - "For the primary dimension grouping, should I use ['Table A' / Column A]? What about calendar — ['Date' / Year]?"
@@ -330,277 +314,116 @@ Identify and ask about these before generating test queries:
 - **TODAY()/NOW() measures:** "These measures use TODAY(): [list]. I'll pin them to a fixed date using TREATAS. What date should I use? (e.g., the last full fiscal month)"
 - **Calculation groups:** "Your model has [N] calculation group items. Should I test Tier 1 measures with each calc group item applied (e.g., YTD, MTD, PY), or just the base measure?"
 - **RLS:** "Is Row-Level Security active on this model? If so, test results depend on the identity. Which role should I test under?"
-- **Large dimensions:** "Do any of your dimensions have high cardinality (e.g., individual entity or item names with 100+ distinct values)? For those, should I group by that dimension for all tiers, or only Tier 1? (Tier 2+ could use a TOPN cap to keep result sets manageable)"
+- **Large dimensions:** "Do any of your dimensions have high cardinality (e.g., individual entity or item names with 100+ distinct values)? For those, should I group by that dimension for all tiers, or only Tier 1? (Regression capture can't use a row cap — it forbids `TOPN` — so for very large dimensions, restrict the grouping to Tier 1 rather than capping rows.)"
 
-### 2.3 Generate the Test Manifest
+### 2.3 Generate the Capture Config
 
-After user confirmation, Claude generates a `test-manifest.json` that records every test case. This file is the contract between the capture script and the comparison script.
+After user confirmation, Claude writes `output/{label}.config.json` — the executable contract consumed by `scripts/capture_snapshot.py`. It is **pure data**: the engine builds the DAX at runtime from `tests` + `group_by_columns`, so the config stores **no DAX query strings** (this avoids cross-language escaping issues). The same file drives both captures — only the `label` changes, via `--label` at the CLI.
 
-**Schema:**
+**Schema** (`"workflow": "capture"` — full key reference in [`docs/config-schema.md`](../../../docs/config-schema.md)):
 
 ```json
 {
-  "manifest_version": "2.0",
+  "workflow": "capture",
+  "label": "baseline",
   "model_name": "<model name>",
-  "change_description": "<brief description of what changed>",
-  "created": "2026-03-26T10:00:00Z",
-  "tolerance": {
-    "numeric": 0,
-    "blank_equals_zero": false
-  },
-  "filter_fields": [
-    {"col": "'[DimTable]'[SlicerColumn]", "label": "by_dim"},
-    {"col": "'Date'[Year]",               "label": "by_year"}
+  "output_dir": "output/regression",
+  "global_filters": [],
+  "max_rows_per_context": 0,
+  "query_timeout_ms": 60000,
+  "smoke_test_timeout_ms": 10000,
+  "memory_threshold_pct": 80,
+  "skip_on_smoke_failure": true,
+  "diagnostic_mode": false,
+  "tests": [
+    { "id": "t0001", "measure": "Measure A", "context": "grand_total" },
+    { "id": "t0002", "measure": "Measure A", "context": "by_dim" },
+    { "id": "t0010", "measure": "Measure A", "context": "by_dim_x_year" }
   ],
-  "cross_products": [
-    {
-      "label": "by_dim_x_year",
-      "columns": [
-        "'[DimTable]'[SlicerColumn]",
-        "'Date'[Year]"
-      ],
-      "topn_partition_col": "'[DimTable]'[SlicerColumn]"
-    }
-  ],
-  "_note": "Example: filter_fields use 'Table A'[Column A] and 'Date'[Start of Year].",
-  "measure_selection": {
-    "method": "explicit | random_sample | domain_filter | type_filter",
-    "sample_size": 20,
-    "domain_filter": null,
-    "type_filter": null,
-    "seed_description": "Stratified sample: 7 [Domain A], 5 [Domain B], 4 [Domain C], 2 [Domain D], 2 Other"
-  },
-  "test_cases": [
-    {
-      "id": "t001",
-      "measure": "[Measure A]",
-      "measure_table": "[Table A]",
-      "tier": 1,
-      "context": "grand_total",
-      "description": "Grand total — no filter context"
-    },
-    {
-      "id": "t002",
-      "measure": "[Measure A]",
-      "measure_table": "[Table A]",
-      "tier": 1,
-      "context": "by_dim",
-      "description": "Grouped by <dim> — tests filter propagation through direct FK"
-    },
-    {
-      "id": "t010",
-      "measure": "[Measure A]",
-      "measure_table": "[Table A]",
-      "tier": 1,
-      "context": "by_dim_x_year",
-      "description": "Cross-product: <dim> × Year — tests combined filter interaction"
-    }
-  ]
+  "group_by_columns": {
+    "by_dim": "'[DimTable]'[SlicerColumn]",
+    "by_year": "'Date'[Year]",
+    "by_dim_x_year": "'[DimTable]'[SlicerColumn]|'Date'[Year]"
+  }
 }
 ```
 
-**Note:** The manifest stores measure names and context labels, NOT pre-built DAX strings. DAX queries are constructed at runtime in the capture script to avoid string escaping issues between Python/JSON and C#.
+**Config rules (enforced by `validate_capture`):**
+- **Measure names are bare — no brackets.** Write `"Measure A"`, not `"[Measure A]"`. The engine adds `[...]` itself; a bracketed name is rejected with a clear error.
+- **`max_rows_per_context` must be `0`** (the row-cap rule in §2.1 above — TOPN is a benchmark-only knob).
+- Every `test.id` must match `[A-Za-z0-9_-]+` and be unique within the file.
+- Every `test.context` must be either `"grand_total"` or a key present in `group_by_columns`.
+- `global_filters` is a list of DAX boolean expressions (e.g. `["'Date'[Year] = 2025"]`); each is applied as `KEEPFILTERS` inside a `CALCULATE` around the measure — matching a report-level slicer. Identical for both captures.
 
-**Present the manifest summary to the user before generating scripts:**
+**Present the config summary to the user before running:**
 
 ```
-Test Manifest Summary:
-  Tier 1: 8 measures × 5 contexts (3 single + 2 cross-product) = 40 test cases
-  Tier 2: 14 measures × 3 contexts (2 single + 1 cross-product) = 42 test cases
-  Tier 3: 67 measures × 1 context = 67 test cases
+Capture config summary (output/{model}.config.json):
+  Tier 1:  8 measures × 5 contexts (3 single + 2 cross-product) = 40 test cases
+  Tier 2: 14 measures × 3 contexts                              = 42 test cases
+  Tier 3: 67 measures × 1 context (grand_total)                 = 67 test cases
   Total: 149 test cases
 
   Cross-product contexts:
-    by_dim1_x_year (2 cols, ~10 rows per measure)
-    by_status_x_year (2 cols, ~25 rows per measure)
+    by_dim_x_year     ('[DimTable]'[SlicerColumn] | 'Date'[Year])
+    by_status_x_year  ('[StatusTable]'[StatusColumn] | 'Date'[Year])
 
-  TOPN: 5 per group (cross-products), 5 overall (single-dimension)
+  Row cap: none (regression forbids TOPN — full result sets are compared)
 
-Estimated execution time: ~3-5 minutes in Tabular Editor
-(based on ~1-2s per EvaluateDax call)
-
-Ready to generate the capture script?
+Ready to capture the baseline?
 ```
 
 ---
 
 ## Phase 3: Capture Snapshots
 
-### 3.1 Generate the Capture Script from Template
+### 3.1 Author the Capture Config
 
-> **READ-ONLY TEMPLATE — copy first, edit second.**
-> `scripts/capture-snapshot.csx` is a tested template and MUST NOT be edited
-> in place. Always copy it to `output/{label}.csx` (e.g.
-> `output/{model}-baseline.csx`, `output/{model}-refactored.csx`) and apply
-> session-specific edits to the **copy**. The user runs the copy in
-> `output/`; the template stays untouched so future sessions inherit the
-> verified version. If you find yourself about to edit
-> `scripts/capture-snapshot.csx` directly, stop — copy it first.
+Write `output/{label}.config.json` per §2.3 (full key reference in [`docs/config-schema.md`](../../../docs/config-schema.md)). There is **no script to copy or edit** — the capture engine is the `scripts/pbi_capture/` package, invoked via `scripts/capture_snapshot.py`. Per session you produce only the JSON config:
 
-Claude MUST use `scripts/capture-snapshot.csx` as the template. **Do NOT generate the capture script from scratch.** The template contains tested, working code for all boilerplate sections including the DAX construction block (which handles single-dimension, cross-product, and TOPN-per-group patterns automatically). Claude's job is to read the template, copy it to `output/`, and replace only these four sections in the copy:
+- `model_name` — flows into the snapshot header (`"model_name"`), which `compare-snapshots.py` uses as the report title.
+- `tests` — the `{ "id", "measure", "context" }` cases from Phase 2 (bare measure names, no brackets).
+- `group_by_columns` — the context→column map from Phase 2 (a single DAX column, or `|`-separated columns for a cross-product).
+- Safety knobs (`query_timeout_ms`, `smoke_test_timeout_ms`, `memory_threshold_pct`, `skip_on_smoke_failure`) — leave at defaults unless the user asks; see Safety Limits below.
 
-**Section 1 — Header `PURPOSE` comment + test-case count:**
-The placeholder at the top of the script reads:
+CLI flags and env vars override config values — precedence is **CLI flag > env var > config file > default** — so one config file drives both the baseline and refactored captures:
 
-```csharp
-// PURPOSE:  <Set per session — describes which model and refactor this
-//            snapshot validates.>
-//           <N test cases — set per session.>
-```
+| Override | CLI flag | Env var |
+|---|---|---|
+| Snapshot label | `--label` | `SNAPSHOT_LABEL` |
+| Model name | — | `MODEL_NAME` |
+| `msmdsrv` port (skip auto-discovery) | `--port` | — |
+| Full connection string | `--connection-string` | `CONNECTION_STRING` |
+| Diagnostic mode (first 8 tests) | `--diagnostic` | `DIAGNOSTIC_MODE` |
+| Output directory | — | `OUTPUT_DIR` |
 
-Replace it with the session's actual purpose and test-case total. Example:
+The engine auto-discovers the local Power BI Desktop `msmdsrv` instance; pass `--port` or `--connection-string` only when several models are open or for an XMLA endpoint.
 
-```csharp
-// PURPOSE:  Capture regression test snapshot for a [model] relationship change.
-//           96 test cases (12 Tier 1 measures × 8 contexts incl. 2 cross-products).
-```
+### 3.2 Run the Captures
 
-Both this comment and the `modelName` default (Section 2 below) describe the same scope from different angles — keep them in sync.
-
-**Section 2 — `modelName` (config var at top of script):**
-Replace the default value of `var modelName = ... ?? "<MODEL NAME — replaced per session by regression-testing skill>";` with the actual model name derived from the conversation (or explicitly stated by the user). Example:
-
-```csharp
-var modelName = System.Environment.GetEnvironmentVariable("MODEL_NAME")
-    ?? "Sales";
-```
-
-The `MODEL_NAME` env var override stays — it lets the user change the name per-run via the CLI without editing the script. The value flows into the JSON snapshot header (`"model_name": "Sales"`) which `compare-snapshots.py` reads for the report title.
-
-**Section 3 — `testLines` (test case definitions):**
-Replace the `var testLines = new List<string> { ... };` block with the test cases generated from Phase 2. Each line follows the format `id|measure|context`. Example:
-
-```csharp
-var testLines = new List<string>
-{
-    "t0001|[Measure A]|grand_total",
-    "t0002|[Measure A]|by_dim1",
-    "t0003|[Measure A]|by_year",
-    "t0010|[Measure A]|by_dim1_x_year",
-    // ... generated from the confirmed test manifest
-};
-```
-
-**Section 4 — `groupByColumns` (dimension map):**
-Replace the `var groupByColumns = new Dictionary<string, string> { ... };` block with the dimensions confirmed in Phase 2. Single-dimension entries map to a single DAX column reference. Cross-product entries use a `|` pipe separator. Example:
-
-```csharp
-var groupByColumns = new Dictionary<string, string>
-{
-    // Single-dimension contexts — replace with columns from your model:
-    { "by_dim1", "'[YourDimTable]'[SlicerColumn]" },
-    { "by_year", "'Date'[Year]" },
-    { "by_status", "'[StatusTable]'[StatusColumn]" },
-
-    // Cross-product contexts (pipe-separated, first column = TOPN partition)
-    { "by_dim1_x_year", "'[YourDimTable]'[SlicerColumn]|'Date'[Year]" },
-    { "by_status_x_year", "'[StatusTable]'[StatusColumn]|'Date'[Year]" },
-};
-// Example: by_flag = 'Table A'[Column A],
-//          by_status = 'Table B'[Column B]
-```
-
-**Everything else in the template is copied verbatim**, including:
-- Configuration section (snapshotLabel, diagnosticMode, outputDir, teamsWebhookUrl, globalFilters, maxRowsPerContext)
-- Helper functions (JsonEscape, SerializeValue, BuildMeasureRef)
-- Global filter fragment builder
-- DAX construction block (handles single-dimension, cross-product, and TOPN-per-group automatically based on `groupByColumns` entries)
-- Execution engine (StreamWriter, DataTable.Dispose, try/catch, Stopwatch)
-- Error logging
-- Summary report builder
-- Teams webhook notification
-- Final Info() popup
-
-The `MODEL_NAME` env var (alongside `SNAPSHOT_LABEL`, `DIAGNOSTIC_MODE`, `OUTPUT_DIR`, `TEAMS_WEBHOOK_URL`, `CONNECTION_STRING`, etc.) lets the user override any of these from the CLI without editing the script. See the env-var summary at the top of the template for the full list.
-
-### 3.2 Webhook Notification (Optional)
-
-The capture script supports an optional Teams notification on completion via Power Automate incoming webhook. When `teamsWebhookUrl` is set in the config section, the script sends an Adaptive Card with:
-- Snapshot label (baseline/refactored)
-- OK / error counts
-- Total duration
-
-**Setup:** In the Teams channel, add the "Post to a channel when a webhook request is received" Workflow, copy the generated URL, and paste it into the script's config.
-
-**Reference implementation — use this exact code block at the end of the capture script, after building the `report` StringBuilder and before the final `Info(report.ToString())`:**
-
-```csharp
-if (!string.IsNullOrWhiteSpace(teamsWebhookUrl))
-{
-    try
-    {
-        var isClean = errCount == 0 && timeoutCount == 0 && skipCount == 0 && abortedMemoryCount == 0;
-        var status = isClean ? "✅ All Passed" :
-            $"⚠️ {errCount} errors / {timeoutCount} timeouts / {skipCount} skipped" +
-            (abortedMemoryCount > 0 ? $" / {abortedMemoryCount} aborted" : "");
-        var cardJson = "{"
-            + "\"type\": \"message\","
-            + "\"attachments\": [{"
-            + "\"contentType\": \"application/vnd.microsoft.card.adaptive\","
-            + "\"content\": {"
-            + "\"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\","
-            + "\"type\": \"AdaptiveCard\","
-            + "\"version\": \"1.4\","
-            + "\"body\": ["
-            + "{\"type\": \"TextBlock\", \"text\": \"PBI Regression Test Complete\", \"weight\": \"Bolder\", \"size\": \"Medium\"},"
-            + "{\"type\": \"FactSet\", \"facts\": ["
-            + "{\"title\": \"Label\", \"value\": \"" + snapshotLabel + "\"},"
-            + "{\"title\": \"Status\", \"value\": \"" + status + "\"},"
-            + "{\"title\": \"Tests\", \"value\": \"" + okCount + " OK / " + errCount + " errors / " + timeoutCount + " timeouts / " + total + " total\"},"
-            + "{\"title\": \"Duration\", \"value\": \"" + sw.Elapsed.TotalMinutes.ToString("F1") + " min\"}"
-            + (skipCount > 0 ? ",{\"title\": \"Skipped\", \"value\": \"" + skipCount + " (smoke test)\"}" : "")
-            + (abortedMemoryCount > 0 ? ",{\"title\": \"Aborted (memory)\", \"value\": \"" + abortedMemoryCount + "\"}" : "")
-            + "]}"
-            + "]"
-            + "}"
-            + "}]"
-            + "}";
-
-        using (var client = new System.Net.WebClient())
-        {
-            client.Headers[System.Net.HttpRequestHeader.ContentType] = "application/json";
-            client.UploadString(teamsWebhookUrl, cardJson);
-        }
-    }
-    catch (Exception webhookEx)
-    {
-        report.AppendLine($"  ⚠ Teams notification failed: {webhookEx.Message}");
-    }
-}
-```
-
-**Note:** The `skipped` and `aborted` fact rows are conditional — they appear only when those counts are > 0.
-
-If the webhook fails, the error is appended to the summary report but does not crash the script. This allows the user to step away from their machine during long-running capture sessions and be notified when the script completes.
-
-### 3.3 Execution Workflow
-
-**GUI (Tabular Editor 3):**
-
-1. **Save the capture script** (e.g., `Desktop\PBI-Regression\capture-snapshot.csx`)
-2. **Run diagnostic mode first**: Set `diagnosticMode = true` (or `set DIAGNOSTIC_MODE=true`), run the script in TE3 connected to the target model. Verify the first measure's tests succeed (popups show DAX + results). Fix any issues before proceeding.
-3. **Capture baseline**: Set `diagnosticMode = false`, `snapshotLabel = "baseline"`. Connect TE3 to the **original** (pre-refactor) model. Run the script. Output: `Desktop\PBI-Regression\baseline.json`
-4. **Capture refactored**: Change `snapshotLabel = "refactored"`. Connect TE3 to the **refactored** model (or the same model after applying change scripts). Run the script. Output: `Desktop\PBI-Regression\refactored.json`
-5. If any errors occurred, check `{label}-errors.log` in the same directory for full exception details and the DAX query that failed.
-
-**CLI (Claude Code / automation):**
-
-Use environment variables to toggle the label without editing the script:
+Run the same config twice, changing only the label:
 
 ```bash
-set SNAPSHOT_LABEL=baseline
-set DIAGNOSTIC_MODE=false
-TabularEditor.exe model.bim -S capture-snapshot.csx
+# 1. (optional) dry-run the first few tests to catch config errors early
+python scripts/capture_snapshot.py --config output/{model}.config.json --label smoke --diagnostic
 
-set SNAPSHOT_LABEL=refactored
-TabularEditor.exe model.bim -S capture-snapshot.csx
+# 2. Baseline — connect Power BI Desktop to the ORIGINAL (pre-change) model, then:
+python scripts/capture_snapshot.py --config output/{model}.config.json --label baseline
 
-python compare-snapshots.py baseline.json refactored.json
+# 3. Apply the change (run the refactor script / swap models), then capture again:
+python scripts/capture_snapshot.py --config output/{model}.config.json --label refactored
+
+# 4. Compare:
+python scripts/compare-snapshots.py output/regression/baseline.json output/regression/refactored.json
 ```
 
-The `OUTPUT_DIR` env var can also be set to redirect output away from the Desktop default.
+Each run writes to `output/regression/` (override with `OUTPUT_DIR` or `output_dir`): `{label}.json` (the snapshot), `{label}-timing.csv`, `{label}-testplan.json`, `{label}-summary.txt`, plus `{label}-errors.log` / `{label}-timeouts.log` when those events occur. Exit code `0` = run completed (per-test errors are recorded as data); `2` = fatal (bad config, no/ambiguous instance, CLR load failure).
 
-**Critical reminder to the user:** "Capture the baseline BEFORE making any changes. If you've already made changes and don't have a baseline, you'll need to revert first (undo in TE, or restore from a .bim backup)."
+**Critical reminder to the user:** "Capture the baseline BEFORE making any changes. If you've already changed the model and have no baseline, revert first — restore from a `.bim`/PBIX backup or undo the change script — then capture."
+
+#### Legacy TE3 output (on request)
+
+The Python path is the default. On explicit request, Claude can emit the retired Tabular Editor script `scripts/capture-snapshot.csx` for the user to run in TE3 (press F5) instead — either the raw template, or a copy populated with the session's `modelName`, `testLines` (`id|measure|context`), and `groupByColumns`. The `.csx` writes the same snapshot JSON schema, so `compare-snapshots.py` consumes it identically. Treat this as an opt-in legacy alternative — don't steer users to it unprompted.
 
 ---
 
@@ -623,8 +446,7 @@ The project includes `compare-snapshots.py` — a single Python script that perf
 - Exit code: 0 = all value tests pass, 1 = value failures (timing regressions don't affect exit code). Exit code 1 now also triggers when any test has `status:"timeout"` in the refactored snapshot that was `"ok"` in the baseline (a new hang = a regression).
 
 **Cross-product comparison notes:**
-- Cross-product results contain multiple grouping columns. The script sorts by ALL grouping columns before row-by-row comparison.
-- TOPN-per-group results from GENERATE will have the partition column repeated — handled naturally by sorting on all non-measure columns.
+- Cross-product results contain multiple grouping columns. The script sorts by ALL non-measure columns before row-by-row comparison, so DAX's unordered output doesn't cause spurious deltas.
 - Row count mismatches on cross-product tests are flagged clearly as Delta=Y with detail "Row count: N → M".
 
 **Usage:**
@@ -704,7 +526,7 @@ To run:
 | `"skipped"` | Measure failed the pre-flight smoke test (one record per dimension permutation for that measure) | `Y` (delta vs a passing baseline) |
 | `"aborted_memory"` | Whole run halted due to between-test memory threshold check | `Y` |
 
-**Why the `"timeout"` status is overloaded:** From v8 onward, the per-query memory watchdog (in `ExecuteDaxWithTimeout`) and the wall-clock timeout both surface as `"timeout"` in JSON because both call `cmd.Cancel()` and return the same status from the executor. The two paths are distinguished by the `Type:` tag in `{label}-timeouts.log`:
+**Why the `"timeout"` status is overloaded:** the per-query memory watchdog and the wall-clock timeout both surface as `"timeout"` in JSON because both abort the in-flight query (`cmd.Cancel()`, then a `conn.Dispose()` backstop) and return the same status from the executor. The two paths are distinguished by the `Type:` tag in `{label}-timeouts.log`:
 - `Type: query_timeout` → wall-clock exceeded `queryTimeoutMs`
 - `Type: memory_watchdog` → memory pressure sustained for 1.5s mid-query
 - `Type: smoketest_timeout` / `smoketest_error` → smoke test failure (also surfaces in `skippedMeasures`)
@@ -755,83 +577,56 @@ Once all tests pass, trigger the session learning loop (see `CLAUDE.md`):
 
 ---
 
-## Script Generation Guidelines
+## Engine, Config & Comparison Reference
 
-### C# / Tabular Editor (.csx) — Template-Based
+### What Claude authors per session (capture config)
 
-**CRITICAL: Always start from `scripts/capture-snapshot.csx` (read-only template).** Read the template file first, copy it to `output/{label}.csx`, then replace only four sections in the copy: header `PURPOSE` + test-case count, `modelName`, `testLines`, and `groupByColumns`. Do NOT touch the DAX construction block — it is verbatim template code that handles single-dimension, cross-product, and TOPN-per-group patterns automatically. Do not rewrite helpers, serialization, execution engine, error handling, diagnostic mode, webhook, or summary report sections.
+Claude produces only `output/{label}.config.json` — never engine code. The fields it fills:
 
-Reference these files for understanding the template's patterns (but do not use them to regenerate template code):
-- `skill-te-csharp-scripting.md` for TE scripting patterns
-- `dax-results-handling.md` for DataTable serialization
-- `performance-patterns.md` for execution efficiency
+- `model_name` — surfaced in the snapshot header (`"model_name": "..."`) for the `compare-snapshots.py` report title.
+- `tests` — `{ "id", "measure", "context" }` objects. `id` matches `[A-Za-z0-9_-]+` and is unique; `measure` is **bare** (no brackets); `context` is `"grand_total"` or a `group_by_columns` key.
+- `group_by_columns` — context→DAX-column map. A single column, or `|`-separated columns for a cross-product.
+- `global_filters` — list of DAX boolean expressions, each wrapped as `KEEPFILTERS` around the measure.
+- `max_rows_per_context` — **must be 0** for capture (TOPN is a benchmark-only knob; see §2.1).
 
-**Template invariants (never change these):**
+The engine (`scripts/pbi_capture/`) builds the DAX, runs it under the safety stack, and serializes the snapshot. Do not reimplement any of it.
 
-- `System.IO.StreamWriter` with `Flush()` per test case for JSON output
-- `DataTable.Dispose()` after each test case (capture row count BEFORE Dispose)
-- `JsonEscape` helper for all string values
-- `SerializeValue` helper with `__BLANK__`, `__NaN__`, `__INF__` sentinels
-- `double.ToString("R")` for round-trip fidelity
-- `diagnosticMode` toggle with `Info()` popups for the first measure only
-- `teamsWebhookUrl` config with tested Adaptive Card webhook block (see Section 3.2)
-- Single `Info()` at script end — never inside the execution loop
-- Separate `{label}-errors.log` for full exception details
-- The DAX construction block builds **bare table expressions** (no `EVALUATE` keyword). The `EVALUATE` prefix is added at the call site (v8+: `ExecuteDaxWithTimeout("EVALUATE " + dax, queryTimeoutMs)`) for the ADOMD path, and `EvaluateDax()` adds it implicitly for the non-direct fallback. Don't add `EVALUATE` inside the construction block.
-- `BuildMeasureRef` helper for global filter wrapping
-- Port discovery block (scans local PBI Desktop `AnalysisServicesWorkspaces` for msmdsrv port; matches by `Model.Database.Name` GUID; falls back to `CONNECTION_STRING` env var for XMLA/non-standard installs) — required for `useDirectAdomd=true` because `Model.Database.Server.ConnectionString` is inaccessible via TE3's wrapper
-- DAX construction block (single-dimension, cross-product with `|` split, TOPN-per-group via GENERATE) — no `IGNORE()` wrappers (removed v8+; IGNORE() is invalid inside `ROW()` and unnecessary inside `SUMMARIZECOLUMNS` once measures are referenced directly)
-- `globalFilters` and `maxRowsPerContext` config variables
-- Environment variable overrides (`SNAPSHOT_LABEL`, `MODEL_NAME`, `DIAGNOSTIC_MODE`, `OUTPUT_DIR`, `TEAMS_WEBHOOK_URL`) with hardcoded fallback defaults
-- Timing CSV output (`{label}-timing.csv`) alongside JSON
+### Safety Limits
 
-#### Safety Limits (v8+)
+The capture engine runs a layered safety stack — pre-flight smoke test, per-query wall-clock timeout, mid-query memory watchdog (with debounce), and a between-test memory check. All are on by default. Set them via config keys (or the env-var equivalents).
 
-| Variable | Default | Env var | Description |
+| Config key | Default | Env var | Description |
 |---|---|---|---|
-| `queryTimeoutMs` | `60000` | `QUERY_TIMEOUT_MS` | Per-query hard cap in ms. v8+ runs the query on a thread-pool task and the script thread polls every 500 ms; on wall-clock expiry the script calls `cmd.Cancel()` (the only mechanism that reliably interrupts a SE-bound Tabular query). `AdomdCommand.CommandTimeout` is set as a backstop only. |
-| `smokeTestTimeoutMs` | `10000` | `SMOKE_TEST_TIMEOUT_MS` | Timeout for the pre-flight smoke test per unique measure. **Mechanism check:** set this to 200–500 ms via env var to force most measures to "fail" the smoke test — the regression run will then short-circuit, the JSON gets `"status": "skipped"` per permutation, and the timeouts.log gets `Type: smoketest_*` entries. Useful for verifying the smoke pipeline end-to-end without waiting for a real broken measure. |
-| `memoryThresholdPct` | `80` | `MEMORY_THRESHOLD_PCT` | Watchdog trip point as % of RAM (hardcoded 16 GB denominator). Set to 0 to disable. Meaningful only in local PBIP workspace mode. On 32 GB use ~40%, on 64 GB use ~20% to match the same absolute threshold. **Debounce (v8+):** the per-query memory watchdog requires 3 consecutive critical polls (3 × 500 ms = 1.5 s sustained pressure) before cancelling, so transient working-set spikes during normal msmdsrv evaluation do not abort legitimate queries. The between-test check (run-level `aborted_memory`) has no debounce — a single critical reading aborts the run. |
-| `useDirectAdomd` | `true` | `USE_DIRECT_ADOMD` | Set to `false` to fall back to `EvaluateDax()` (no timeout enforcement, no cancellability — a hung query freezes TE3). Use only as a compatibility escape hatch. |
-| `skipOnSmokeTestFailure` | `true` | `SKIP_ON_SMOKE_FAILURE` | When `true`, measures failing the smoke test are skipped in the main run with `status:"skipped"` per dimension permutation. When `false`, they still attempt to run (caught by `queryTimeoutMs`). |
-| `discoveredConnStr` | *(auto via port discovery)* | `CONNECTION_STRING` | Full MSOLAP connection string. Set this env var to skip port discovery — required for XMLA endpoints or non-standard PBI Desktop installs. When unset, the script probes local `AnalysisServicesWorkspaces` folders and matches by `Model.Database.Name`. |
+| `query_timeout_ms` | `60000` | `QUERY_TIMEOUT_MS` | Per-query wall-clock cap. A watchdog thread polls every 500 ms; on expiry the engine cancels the query (`cmd.Cancel()`, then a `conn.Dispose()` backstop that interrupts even pure formula-engine queries). The Python watchdog is the **sole** timeout enforcement — server-side `CommandTimeout` is deliberately `0`. |
+| `smoke_test_timeout_ms` | `10000` | `SMOKE_TEST_TIMEOUT_MS` | Pre-flight smoke test cap per unique measure (`EVALUATE ROW("r", [M])`). **Mechanism check:** set to 200–500 ms to force most measures to "fail" — the run short-circuits with `"status": "skipped"` rows and `Type: smoketest_*` log entries, verifying the pipeline end-to-end. |
+| `memory_threshold_pct` | `80` | `MEMORY_THRESHOLD_PCT` | Watchdog trip point as a true % of **actual** total RAM (read via `GlobalMemoryStatusEx` — no hard-coded denominator, so no per-machine scaling needed). The mid-query watchdog requires 3 consecutive critical polls (3 × 500 ms = 1.5 s sustained) before cancelling, so transient spikes don't abort legitimate queries. The between-test check (`aborted_memory`) has no debounce — a single critical reading aborts the run. Set to 0 to disable. |
+| `skip_on_smoke_failure` | `true` | `SKIP_ON_SMOKE_FAILURE` | When `true`, measures failing the smoke test are skipped (`status:"skipped"` per permutation). When `false`, they still attempt to run and rely on the wall-clock + memory watchdogs. |
+| connection | *(auto-discovered)* | `CONNECTION_STRING` | The engine auto-discovers the local `msmdsrv` instance and its single catalog. Multiple open instances → it fails with an actionable list; disambiguate with `--port` or `--connection-string` / `CONNECTION_STRING`. |
 
-**How smoke-test skipping works internally (v8+):** the smoke loop builds an in-memory `HashSet<string> skippedMeasures` and a `Dictionary<string,string> smokeResults` (measure → failure reason). Nothing is written to disk for smoke failures except (a) one `Type: smoketest_*` entry per failed measure in `{label}-timeouts.log`, and (b) one `"status": "skipped"` JSON record per dimension permutation in the main snapshot. The skip is *per measure, not per test* — every test case for a failed measure gets the same `skip_reason` and zero duration.
+**Smoke-skip mechanics:** a failed smoke test writes (a) one `Type: smoketest_*` entry per failed measure in `{label}-timeouts.log`, and (b) one `"status": "skipped"` record per dimension permutation in the snapshot — all sharing the same `skip_reason`, zero duration. The skip is *per measure, not per test*.
 
-**XMLA note:** Power BI gateway enforces its own query cap (~225s). `queryTimeoutMs > 225000` has no effect against the Power BI service. The memory watchdog is also ineffective in XMLA mode (model memory lives on the Fabric capacity).
+**XMLA note:** the Power BI gateway enforces its own ~225 s query cap, so `query_timeout_ms > 225000` has no effect against the service; the memory watchdog is also ineffective in XMLA mode (model memory lives on the Fabric capacity).
 
-**What Claude generates on demand:**
+### Comparison (`scripts/compare-snapshots.py`)
 
-- `modelName` — the model display name, derived from the conversation (or supplied by the user); written as the default fallback in the script's config section and surfaced in the JSON snapshot header (`"model_name": "..."`) for use by `compare-snapshots.py`
-- `testLines` — the `id|measure|context` entries from the confirmed test manifest
-- `groupByColumns` — the context-label-to-DAX-column dictionary from confirmed filter contexts (single-dimension entries map to a single DAX column; cross-product entries use `|` pipe separator between columns, with the first column serving as the TOPN partition)
-- Header comment updates (PURPOSE line, test case count)
+A stable, tested script — not generated per session. It performs value comparison and timing analysis in one pass.
 
-### Python (comparison)
+- **Dependency:** `openpyxl` (auto-installed on first run if missing) — the only non-stdlib dependency in the toolchain.
+- **Input:** two snapshot JSONs (baseline + refactored) from `capture_snapshot.py`.
+- **Output:** single `regression-report.xlsx` with 6 sheets (All Tests, Value Deltas, By Measure, By Context, Top Movers, Timeout Regressions).
+- Reads JSON as `utf-8-sig` (Windows BOM); sorts rows by all non-measure columns before comparing (DAX doesn't guarantee order).
+- CLI: `python scripts/compare-snapshots.py <baseline.json> <refactored.json> [--output report.xlsx]`.
+- Exit code: 0 = all value tests pass; 1 = value failures, **or** any test that is `status:"timeout"` in refactored but was `"ok"` in baseline (a new hang = a regression).
+- **Delta flag** per test (Y/N) enables filtering for regression review (Delta=Y) or performance review (sort by Δ ms).
+- Configurable thresholds at the top of the script: `NUMERIC_TOLERANCE`, `REGRESSION_PCT`, `IMPROVEMENT_PCT`, `MIN_MS_FOR_PCT`.
 
-`scripts/compare-snapshots.py` is a stable, tested script — not generated fresh each session. It performs both value comparison and timing analysis in one pass.
+### DAX the engine builds (for context when discussing results)
 
-- **Dependency:** `openpyxl` (auto-installed on first run if missing) — the only non-stdlib dependency in the toolchain
-- **Input:** two snapshot JSONs (baseline + refactored) from `capture-snapshot.csx`
-- **Output:** single `regression-report.xlsx` with 6 sheets (All Tests, Value Deltas, By Measure, By Context, Top Movers, Timeout Regressions)
-- Handle encoding: read JSON with `encoding='utf-8-sig'` (Windows BOM)
-- Sort rows by all non-measure columns before comparing (DAX doesn't guarantee order)
-- Use `argparse` for CLI: `python compare-snapshots.py <baseline> <refactored> [--output report.xlsx]`
-- Exit code: 0 = all value tests pass, 1 = value failures found (timing regressions don't affect exit code). Exit code 1 now also triggers when any test has `status:"timeout"` in the refactored snapshot that was `"ok"` in the baseline (a new hang = a regression).
-- **Delta flag:** every test case gets Delta = Y or N based on value comparison. Enables filtering the single report for regression review (Delta=Y) or performance review (sort by Δ ms)
-- **Configurable thresholds** at top of script: `NUMERIC_TOLERANCE`, `REGRESSION_PCT`, `IMPROVEMENT_PCT`, `MIN_MS_FOR_PCT`
-
-### DAX Query Generation
-
-- **The DAX construction block builds bare table expressions — no `EVALUATE` keyword**. The prefix is added at the call site (v8+: `ExecuteDaxWithTimeout("EVALUATE " + dax, queryTimeoutMs)`) for the ADOMD path; `EvaluateDax()` adds it implicitly for the non-direct fallback. Adding `EVALUATE` inside the construction block double-wraps and throws.
-- **Build DAX at runtime in the C# script**, not as pre-embedded strings in the test case data. Store test cases as simple `id|measure|context` entries, and construct the SUMMARIZECOLUMNS call from a dimension map dictionary. This avoids all cross-language string escaping issues.
-- Use `SUMMARIZECOLUMNS` for grouped measures (not `ADDCOLUMNS` over `VALUES` — SUMMARIZECOLUMNS auto-removes blank rows which matches report visual behavior).
-- **Do NOT wrap the measure in `IGNORE()`** (v8+ behavior). `IGNORE()` is a SUMMARIZECOLUMNS modifier that suppresses blank totals per measure expression — it does NOT mean "ignore filters." Wrapping the bare measure reference in `IGNORE()` adds no semantic value to a regression test, and `IGNORE()` is **invalid inside `ROW()`** (the smoke-test query), so removing it everywhere keeps the construction uniform.
-- For pinned filter values, use `CALCULATETABLE(SUMMARIZECOLUMNS(...), TREATAS({value}, 'Table'[Column]))` — this is the correct pattern per SQLBI guidance.
-- For calculation group testing, add the calc group column as a filter: `TREATAS({"YTD"}, 'Time Intelligence'[Selection])`.
-- Never use `ALL()` in test queries — we want to test under the natural filter context.
-- Avoid `TOPN` in test queries when full comparison is needed — but use TOPN for high-cardinality dimensions where full evaluation is impractical.
-- **Cross-product TOPN uses GENERATE pattern** — `GENERATE(VALUES(partitionCol), TOPN(N, SUMMARIZECOLUMNS(detailCols, "Result", measureRef)))` — partition column is always the first in the `|`-separated list.
+- Queries are **bare table expressions**; the engine prepends `EVALUATE` at the call site. (The smoke query is the exception — `EVALUATE ROW("r", <ref>)`.)
+- Grouped measures use `SUMMARIZECOLUMNS` (auto-removes blank rows, matching report-visual behavior), not `ADDCOLUMNS` over `VALUES`.
+- The measure reference is **never** wrapped in `IGNORE()` — it's invalid inside `ROW()` and adds nothing inside `SUMMARIZECOLUMNS`.
+- `global_filters` wrap the measure as `CALCULATE([M], KEEPFILTERS(<f>), …)`, matching a report-level slicer.
+- Cross-products put all grouping columns in one `SUMMARIZECOLUMNS`. **No `TOPN`/`GENERATE` in capture** — the row cap is rejected, so full result sets are compared.
 
 ---
 
@@ -873,7 +668,7 @@ This skill adapts its test strategy based on the type of change. Here are common
 
 ## Quick Reference: User Interaction Points
 
-At minimum, the user must confirm these before Claude generates scripts:
+At minimum, the user must confirm these before Claude generates the capture config:
 
 | Decision Point | What Claude proposes | User confirms or adjusts |
 |---|---|---|
@@ -884,50 +679,37 @@ At minimum, the user must confirm these before Claude generates scripts:
 | Filter contexts | Dimensions identified from model structure | "Add Region, skip Portfolio" |
 | Query approach | Single-dimension, cross-product, or both | "Single + one cross-product" |
 | Cross-product columns | Low-cardinality dimension pairs | "StatusFlag × Year, Category × Year" |
-| TOPN strategy | Per-group (cross-product) vs overall (single) | "5 per group" |
 | Specific filter values | Suggested based on model knowledge | "Use FY2025, [entity] = [known value]" |
 | Edge cases (TODAY, RLS, calc groups) | Identified from DAX patterns | "Pin to 2025-12-31, skip RLS" |
-| Test manifest summary | Count of test cases by tier | "Looks good, generate the scripts" |
+| Capture config summary | Count of test cases by tier | "Looks good, run the baseline" |
 
 ---
 
 ## File Outputs
 
-The skill produces these files:
+Capture writes to `output/regression/` by default (override with `output_dir` / `OUTPUT_DIR`):
 
 | File | Source | Purpose |
 |---|---|---|
-| `test-manifest.json` | Claude (in conversation) | Records test cases, measures, tiers, contexts, and selection method (no embedded DAX) |
-| `output/{label}.csx` | Copy of `scripts/capture-snapshot.csx` template, with `modelName`, `testLines`, and `groupByColumns` replaced by Claude (the template stays untouched) | TE3 script — runs DAX, streams snapshot JSON + timing CSV to disk |
-| `{label}.json` | User runs `.csx` in TE3 | Snapshot of model results (includes per-test timing) |
-| `{label}-testplan.json` | Generated by `.csx` pre-flight (v8+) | Planned test order written before execution begins; survives a force-kill so you can identify which test was in flight |
-| `{label}-timing.csv` | Generated by `.csx` alongside JSON | Lightweight per-test-case timing for quick reference |
-| `{label}-errors.log` | Generated by `.csx` if errors occur | Full exception details per failed test case |
-| `{label}-timeouts.log` | Generated by `.csx` if timeouts OR smoke-test failures occur (v8+) | Timed-out tests AND smoke-test failures, each with `Type:` (memory_watchdog \| query_timeout \| smoketest_timeout \| smoketest_error \| query_error), `Reason:` (full error message), and full DAX |
-| `scripts/compare-snapshots.py` | Stable, tested script in repo | Python comparison — reads two snapshot JSONs, outputs single xlsx report |
-| `regression-report.xlsx` | User runs `.py` | Unified report: value deltas + timing comparison in one workbook (6 sheets) |
+| `output/{label}.config.json` | Claude (per session) | The capture contract: `tests` + `group_by_columns` + safety knobs (no embedded DAX). One file drives both captures via `--label`. |
+| `{label}.json` | `capture_snapshot.py` | Snapshot of model results (per-test values + timing). |
+| `{label}-testplan.json` | `capture_snapshot.py` (pre-flight) | Planned test order, written before execution; survives a force-kill so you can see which test was in flight. |
+| `{label}-timing.csv` | `capture_snapshot.py` | Lightweight per-test-case timing. |
+| `{label}-summary.txt` | `capture_snapshot.py` | The run summary (also printed to stdout); analyzable via `powerbi-context-mode`. |
+| `{label}-errors.log` | `capture_snapshot.py` (if errors) | Full exception details per failed test case. |
+| `{label}-timeouts.log` | `capture_snapshot.py` (if timeouts/smoke failures) | One entry per timeout/smoke-failure with `Type:` (memory_watchdog \| query_timeout \| smoketest_timeout \| smoketest_error \| query_error), `Reason:`, and full DAX. |
+| `regression-report.xlsx` | `compare-snapshots.py` | Unified report: value deltas + timing comparison in one workbook (6 sheets). |
 
-Both `scripts/capture-snapshot.csx` and `scripts/compare-snapshots.py` are stable, tested scripts in the repo. Claude only generates the session-specific `testLines` and `groupByColumns` sections for the capture script (writing them into the `output/{label}.csx` copy, never the template). The comparison script is used as-is with no per-session changes.
+`scripts/capture_snapshot.py` (+ the `scripts/pbi_capture/` engine) and `scripts/compare-snapshots.py` are stable, tested code — never edited per session. Claude only authors the JSON config.
 
-**End-to-end workflow — GUI (3 steps after script setup):**
-
-1. Run `capture-snapshot.csx` in TE3 with `snapshotLabel = "baseline"`, then again with `"refactored"`
-2. Run `python compare-snapshots.py baseline.json refactored.json`
-3. Open `regression-report.xlsx` — filter Delta=Y for value regressions, sort by Δ ms for performance
-
-**End-to-end workflow — CLI (Claude Code / automation):**
-
-The capture script supports environment variable overrides so Claude Code can toggle the label without editing the file:
+**End-to-end workflow:**
 
 ```bash
-# Windows (cmd)
-set SNAPSHOT_LABEL=baseline
-TabularEditor.exe model.bim -S capture-snapshot.csx
-
-set SNAPSHOT_LABEL=refactored
-TabularEditor.exe model.bim -S capture-snapshot.csx
-
-python compare-snapshots.py baseline.json refactored.json
+# capture both sides from one config, then compare
+python scripts/capture_snapshot.py --config output/{model}.config.json --label baseline
+python scripts/capture_snapshot.py --config output/{model}.config.json --label refactored
+python scripts/compare-snapshots.py output/regression/baseline.json output/regression/refactored.json
+# open regression-report.xlsx — filter Delta=Y for value regressions, sort by Δ ms for performance
 ```
 
-Environment variables: `SNAPSHOT_LABEL`, `DIAGNOSTIC_MODE` ("true"/"false"), `OUTPUT_DIR` (full path). When not set, the script falls back to its hardcoded defaults (unchanged GUI behavior).
+**Legacy TE3 (on request):** Claude can instead emit `scripts/capture-snapshot.csx` (raw or populated) to run in TE3; it writes the same snapshot schema, so the comparison step is identical. Opt-in only.

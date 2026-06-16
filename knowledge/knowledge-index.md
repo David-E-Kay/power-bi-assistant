@@ -57,8 +57,8 @@ Human-facing guides and SOPs. Distinct from `.claude/skills/` (which are procedu
 
 | File | Lines | Access Pattern | When to consult |
 |---|---:|---|---|
-| `docs/guides/regression-testing-developer-guide.md` | ~645 | direct-read (onboarding doc) | Any time a new developer joins, or when answering high-level "how does regression testing work here?" questions. Routes back into `.claude/skills/regression-testing/SKILL.md` for procedural detail. |
-| `docs/guides/measure-benchmarking-developer-guide.md` | ~470 | direct-read (onboarding doc) | High-level "how does measure benchmarking work here?" questions. Routes into `.claude/skills/measure-benchmarking/SKILL.md` for procedural detail. |
+| `docs/guides/regression-testing-developer-guide.md` | ~585 | direct-read (onboarding doc) | Any time a new developer joins, or when answering high-level "how does regression testing work here?" questions. Documents the TE-free Python workflow; routes back into `.claude/skills/regression-testing/SKILL.md` for procedural detail. |
+| `docs/guides/measure-benchmarking-developer-guide.md` | ~475 | direct-read (onboarding doc) | High-level "how does measure benchmarking work here?" questions. Documents the TE-free Python workflow; routes into `.claude/skills/measure-benchmarking/SKILL.md` for procedural detail. |
 
 ---
 
@@ -94,8 +94,9 @@ These files are loaded by the data-goblin plugin's own skills. **Do NOT** add th
 When a task needs model metadata (relationships, measure definitions, dependencies), `powerbi-context-mode` runs this chain. See `.claude/skills/powerbi-context-mode/SKILL.md` for the full detection commands.
 
 1. **Tabular Editor CLI** (live) — `where TabularEditor.exe` or `POWERBI_TE_CLI_PATH` env var. Preferred when available.
-2. **`scripts/bim_to_kb_markdown.py` snapshot** — `Glob artifacts/model-schema/*.md`. Current operational fallback. Flag staleness in responses.
-3. **Power BI MCP server** — read `.mcp.json` and `~/.claude/.claude.json`; look for connectors named `power-bi`, `pbi`, `analysis-services`. Use for live queries it supports; TE CLI is preferred when both are available.
+2. **Live TOM export** — `scripts/export_schema.py` (TE-free; model open in Power BI Desktop). Serializes the live model via TOM and runs the same parser, producing the same `artifacts/model-schema/model-schema-<slug>.md`. Preferred live fallback when TE CLI isn't installed. One-time prereq: `scripts/pbi_capture/provision_libs.py`.
+3. **`scripts/bim_to_kb_markdown.py` snapshot** — `Glob artifacts/model-schema/*.md`. Offline `.bim` fallback. Flag staleness in responses.
+4. **Power BI MCP server** — read `.mcp.json` and `~/.claude/.claude.json`; look for connectors named `power-bi`, `pbi`, `analysis-services`. Use for live queries it supports; TE CLI is preferred when both are available.
 
 The skill instructs Claude to **announce the source layer** in any analysis (e.g., "Source: parsed `.bim` snapshot, generated 2026-04-13 — live model may have diverged").
 

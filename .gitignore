@@ -7,6 +7,10 @@ Thumbs.db
 # per-user MCP server paths — not tied to the project
 .claude/.mcp.json
 
+# Graphify skill + its local auto-invoke trigger — kept on disk, excluded from the public repo
+.claude/skills/graphify/
+.claude/CLAUDE.md
+
 # Python
 __pycache__/
 *.pyc
@@ -22,3 +26,8 @@ libs/
 
 # Generated model-schema snapshots (regenerable cache; keep the explanatory README)
 artifacts/model-schema/model-schema-*.md
+
+# Local MCP server packages
+.mcp-servers/
+analysis-services.powerbi-modeling-mcp-*.vsix
+.mcp.json

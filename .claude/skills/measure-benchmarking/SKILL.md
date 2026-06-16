@@ -1,11 +1,11 @@
 ---
 name: measure-benchmarking
-description: "Use this skill when the user asks to 'benchmark measures', 'profile measure performance', 'find slow measures', 'identify slowest queries', 'time measures', 'measure timing', 'performance sweep', 'which measures are slow', or any request involving profiling query execution time across a set of Power BI measures. Covers the full lifecycle: measure selection (semantic search from .bim, domain filtering, exclusion patterns), dimension/context configuration (single-slice and cross-product with TREATAS value filters), script generation from the benchmark-measures.csx template, and result interpretation. Distinct from regression testing — this skill captures timing only (no result values) for optimization prioritization."
+description: "Use this skill when the user asks to 'benchmark measures', 'profile measure performance', 'find slow measures', 'identify slowest queries', 'time measures', 'measure timing', 'performance sweep', 'which measures are slow', or any request involving profiling query execution time across a set of Power BI measures. Covers the full lifecycle: measure selection (semantic search from .bim, domain filtering, exclusion patterns), dimension/context configuration (single-slice and cross-product with TREATAS value filters), authoring the JSON config consumed by scripts/benchmark_measures.py, and result interpretation. The stable benchmark engine lives in scripts/pbi_capture/ (TE-free Python); the retired benchmark-measures.csx template remains available on request. Distinct from regression testing — this skill captures timing only (no result values) for optimization prioritization."
 ---
 
 # Measure Benchmarking for Power BI Models
 
-A conversational skill that guides Claude through planning, generating, and executing measure performance benchmarks for Power BI semantic models. The benchmark script uses `scripts/benchmark-measures.csx` as a tested template (read-only — copy to `output/{label}.csx` per session, edit the copy). Claude populates the configuration sections — `measures`, `singleSliceDimensions`, `crossProductColumns`, `crossProductValueFilters`, `globalFilters`, and `maxRowsPerContext` — based on user input. All other code (helpers, DAX construction, execution engine, timing CSV output, error handling, diagnostic mode, Teams webhook, summary report) is copied verbatim from the template.
+A conversational skill that guides Claude through planning, generating, and executing measure performance benchmarks for Power BI semantic models. Benchmarks run on the TE-free Python path: `python scripts/benchmark_measures.py --config output/{label}.config.json`. The stable engine lives in the `scripts/pbi_capture/` package and is **never edited per session** — Claude authors only a JSON config (`"workflow": "benchmark"`) with the fields `measures`, `single_slice_dimensions`, `cross_product_columns`, `cross_product_value_filters`, `global_filters`, and `max_rows_per_context`. The engine builds the DAX, runs it under the safety stack, and writes the timing CSV. The retired `benchmark-measures.csx` template is still in the repo and can be emitted on request (see "Legacy TE3 output (on request)").
 
 ## When to Use This Skill
 
@@ -19,7 +19,7 @@ Trigger when:
 Do NOT use for:
 - Pre/post comparison of a specific change (use `skill-regression-testing.md` — it captures both values and timing)
 - Deep query plan analysis of a single measure (use DAX Studio Server Timings directly)
-- Report-level visual performance (this skill tests the semantic model layer via EvaluateDax, not visual rendering)
+- Report-level visual performance (this skill tests the semantic model layer via DAX query execution, not visual rendering)
 - General DAX debugging or optimization (use `pbi-dax-patterns.md` or `{model}-dax-performance.md`)
 
 ### Relationship to Regression Testing
@@ -30,15 +30,15 @@ Do NOT use for:
 | **Output** | Values + timing (JSON + CSV) | Timing only (CSV) |
 | **When** | Before and after a model change | Any time — no change required |
 | **Measures** | Scoped to affected measures (tiered) | Broad sweep — all measures in a domain |
-| **Script** | `capture-snapshot.csx` | `benchmark-measures.csx` |
+| **Runner** | `capture_snapshot.py` | `benchmark_measures.py` |
 | **Comparison** | `compare-snapshots.py` diffs two snapshots | Sort CSV by `duration_ms` descending |
 
 ## Core Principles
 
 1. **The user drives measure selection.** Claude proposes lists based on semantic search of the .bim or model knowledge, but the user confirms before any script is generated. The user may describe measures by domain ("all [Domain A] cost measures"), by exclusion ("skip budget and time intelligence"), or by explicit list.
-2. **Use the tested template.** The benchmark script at `scripts/benchmark-measures.csx` is a proven, working template (read-only — copy to `output/{label}.csx` per session). Claude MUST use it as the base and only populate the configuration sections. All other code — helpers, execution engine, TREATAS construction, TOPN logic, error handling, diagnostic mode, Teams webhook, summary report with Top 10 Slowest — is copied verbatim from the template. Do NOT regenerate these sections from scratch.
+2. **Use the stable engine; author only the config.** The benchmark engine (`scripts/pbi_capture/`, run via `scripts/benchmark_measures.py`) is proven, tested code and is **never edited per session**. Claude's only per-session artifact is the JSON config. The engine handles TREATAS construction, TOPN logic, the safety stack, error handling, diagnostic mode, and the summary report with Top 10 Slowest. Do NOT fork or reimplement that logic.
 3. **Mirror real report behavior.** DAX queries are constructed to match how Power BI visual queries work: SUMMARIZECOLUMNS with filter arguments, TREATAS for slicer simulation, bare measure references (no `IGNORE` — removed in v3 because it inflated blank-row counts). This ensures timing reflects what end users actually experience.
-4. **Single run per test case.** TE3 scripting cannot clear the AS engine cache between queries. Multiple runs would measure warm-cache performance after the first query, skewing results. A single pass gives the most honest mixed-cache timing, representative of typical report usage.
+4. **Single run per test case.** The benchmark cannot clear the AS engine cache between queries. Multiple runs would measure warm-cache performance after the first query, skewing results. A single pass gives the most honest mixed-cache timing, representative of typical report usage.
 
 ---
 
@@ -192,13 +192,13 @@ Example interaction:
 >
 > **Claude generates:**
 > ```
-> crossProductColumns:
+> cross_product_columns:
 >   'Table A'[Column A]
 >   'Date'[Month]
 >   'Table C'[Column C]
 >   'Table B'[Column B]
 >
-> crossProductValueFilters (TREATAS):
+> cross_product_value_filters (TREATAS):
 >   'Table C'[Column C] → {"Value 1"}
 >   'Table B'[Column B] → {"Value 2"}
 >
@@ -229,38 +229,55 @@ For benchmarking, `0` is usually correct because the goal is to measure the full
 
 ---
 
-## Phase 3: Generate the Script
+## Phase 3: Author the Config
 
-### 3.1 Template Rules
+### 3.1 Config Fields
 
-The benchmark script (`benchmark-measures.csx`) is a tested template. Claude populates ONLY these configuration sections:
+There is no script to copy. Claude writes `output/{label}.config.json` with `"workflow": "benchmark"` (full key reference in [`docs/config-schema.md`](../../../docs/config-schema.md)). The fields Claude fills, from Phases 1–2:
 
-| Section | What Claude fills in |
-|---|---|
-| `measures` | `List<string>` of measure names from Phase 1 |
-| `singleSliceDimensions` | `Dictionary<string, string>` of label → DAX column from Phase 2.1 |
-| `crossProductColumns` | `List<string>` of DAX columns from Phase 2.2 |
-| `crossProductValueFilters` | `Dictionary<string, List<string>>` of column → values from Phase 2.2 |
-| `globalFilters` | `List<string>` of KEEPFILTERS expressions from Phase 2.3 |
-| `maxRowsPerContext` | Integer from Phase 2.4 |
+| Field | Type | From |
+|---|---|---|
+| `measures` | list of strings (**bare** names, no brackets) | Phase 1 |
+| `single_slice_dimensions` | object: `label → "'Table'[Column]"` | Phase 2.1 |
+| `cross_product_columns` | list of `"'Table'[Column]"` | Phase 2.2 |
+| `cross_product_value_filters` | object: `"'Table'[Column]" → ["Value", …]` (TREATAS) | Phase 2.2 |
+| `global_filters` | object: `"'Table'[Column]" → ["Value", …]` (TREATAS, applied to every query) | Phase 2.3 |
+| `max_rows_per_context` | integer (0 = no cap; benchmark *may* cap, unlike capture) | Phase 2.4 |
 
-All other code — helpers (`ExecuteDaxWithTimeout`, `IsMemoryCritical`, `BuildTreatasArgs`), test matrix generation, execution engine with timeout and memory watchdog, timing CSV writer, error handling, diagnostic mode, Teams webhook, summary report with Top 10 Slowest and Timed Out Queries — MUST be copied verbatim from the template. Do NOT regenerate these sections.
+Leave the safety knobs (`query_timeout_ms`, `smoke_test_timeout_ms`, `memory_threshold_pct`, `skip_on_smoke_failure`) and `diagnostic_mode` at their defaults unless the user asks. The engine builds the DAX and runs the sweep.
 
-### 3.2 Script Generation Process
+Example skeleton:
 
-1. Start with the full `scripts/benchmark-measures.csx` template (copy it to `output/{label}.csx` — never edit the template in place)
-2. Replace the commented-out placeholder entries in each configuration section with the confirmed values
-3. Leave `benchmarkLabel`, `diagnosticMode`, `teamsWebhookUrl`, and `outputDir` at their defaults (the user adjusts these per-run)
-4. Present the complete script for download
+```json
+{
+  "workflow": "benchmark",
+  "label": "benchmark",
+  "measures": ["Measure A", "Measure B"],
+  "single_slice_dimensions": { "by_month": "'Date'[Month]" },
+  "cross_product_columns": ["'Dim'[Col]", "'Date'[Month]"],
+  "cross_product_value_filters": { "'Dim'[Col]": ["Value 1"] },
+  "global_filters": { "'Date'[Year]": ["2026"] },
+  "max_rows_per_context": 0
+}
+```
 
-### 3.3 Validation Before Delivery
+> **Note the `global_filters` shape differs from regression capture.** Here it is an object (`column → [values]`) applied as TREATAS. In the capture config it is a list of DAX boolean expressions wrapped as KEEPFILTERS. Use the benchmark form in benchmark configs.
 
-Before presenting the script, verify:
-- Every measure name in the list matches a measure in the model (if .bim is available)
-- Every dimension column reference uses the correct `'Table'[Column]` syntax
-- Cross-product value filter columns are all present in `crossProductColumns`
-- No duplicate measures in the list
-- Label keys in `singleSliceDimensions` are unique and use snake_case
+### 3.2 Validation Before Running
+
+Before running, verify (the engine also validates and rejects violations):
+- Every measure name matches a model measure (if a `.bim`/schema is available) and is **bare** (no brackets).
+- Every column reference uses `'Table'[Column]` syntax.
+- Every key in `cross_product_value_filters` also appears in `cross_product_columns` (the validator rejects orphans).
+- No duplicate measures; `single_slice_dimensions` labels are unique snake_case.
+
+### 3.3 Run It
+
+```bash
+python scripts/benchmark_measures.py --config output/{label}.config.json
+```
+
+Writes to `output/benchmark/` (override with `OUTPUT_DIR` / `output_dir`). Use `--diagnostic` (or `"diagnostic_mode": true`) to run only the first 8 tests as a quick sanity pass. Exit code `0` = run completed (per-test errors/timeouts are data); `2` = fatal (bad config, no/ambiguous instance, CLR load failure).
 
 ### 3.4 Test Case Count
 
@@ -273,58 +290,51 @@ Estimated runtime: ~{T × avg_ms / 1000 / 60} minutes
 (assuming ~2s average per query — actual time varies widely by measure complexity)
 ```
 
+#### Legacy TE3 output (on request)
+
+The Python path is the default. On explicit request, Claude can emit the retired `scripts/benchmark-measures.csx` (raw or populated with the session's `measures`, `singleSliceDimensions`, `crossProductColumns`, `crossProductValueFilters`, `globalFilters`, `maxRowsPerContext`) for the user to run in TE3 (press F5). It writes the same timing CSV columns. Opt-in only — don't steer users to it unprompted.
+
 ---
 
-## Safety Limits (v5+)
+## Safety Limits
 
-The benchmark script includes a layered safety stack — wall-clock timeout, mid-query memory watchdog with debounce, between-test memory check, and pre-flight smoke test — to prevent machine hangs from broken or runaway measures. These are configured via env vars (CLI) or by editing the config block directly (GUI). All four are **on by default** (matches the v8 regression script) because earlier benchmark runs had real machine-crashing hung queries.
+The benchmark engine runs a layered safety stack — wall-clock timeout, mid-query memory watchdog with debounce, between-test memory check, and pre-flight smoke test — to prevent machine hangs from broken or runaway measures. Set them via config keys (or the env-var equivalents). All four are **on by default** because earlier benchmark runs hit real machine-crashing hung queries.
 
-### Configuration Variables
+### Configuration Keys
 
-| Variable | Default | Env var | Notes |
+| Config key | Default | Env var | Notes |
 |---|---|---|---|
-| `queryTimeoutMs` | `60000` | `QUERY_TIMEOUT_MS` | Per-query wall-clock cap. v5+ runs the query on a thread-pool task and the script thread polls every 500 ms; on wall-clock expiry the script calls `cmd.Cancel()` (the only mechanism that reliably interrupts a SE-bound Tabular query). `AdomdCommand.CommandTimeout` is set as a backstop only. Set to 0 to disable (not recommended). |
-| `smokeTestTimeoutMs` | `10000` | `SMOKE_TEST_TIMEOUT_MS` | Per-measure pre-flight smoke test cap. Smoke test runs `EVALUATE ROW("r", [Measure])` per unique measure. Measures that fail this minimal check are skipped in the main run with `status:"skipped"` so a single runaway can't take down the whole benchmark. |
-| `memoryThresholdPct` | `80.0` | `MEMORY_THRESHOLD_PCT` | Memory watchdog trip point as % of RAM. **Mid-query (v5+):** the per-query watchdog requires 3 consecutive critical polls (3 × 500 ms = 1.5 s sustained pressure) before cancelling, so transient working-set spikes during normal msmdsrv evaluation do not abort legitimate queries. **Between-test:** has no debounce — a single critical reading aborts the rest of the run with `status:"aborted_memory"`. Set to 0 to disable both. |
-| `useDirectAdomd` | `true` | `USE_DIRECT_ADOMD` | When true, uses ADOMD with cancellable threaded execution. When false, falls back to `EvaluateDax()` (no timeout, no cancellability — a hung query freezes TE3). Use only as a compatibility escape hatch. |
-| `skipOnSmokeTestFailure` | `true` | `SKIP_ON_SMOKE_FAILURE` | When `true` (default), measures failing the smoke test are skipped. Their failure shows up as one `Type: smoketest_*` entry in the timeouts log and one `"status":"skipped"` row per dimension permutation in the timing CSV. Set to `false` to attempt every measure regardless and rely on the wall-clock + memory watchdogs to catch runaways at runtime — accepts the risk of long timeouts/cancels in exchange for not pre-filtering measures.|
+| `query_timeout_ms` | `60000` | `QUERY_TIMEOUT_MS` | Per-query wall-clock cap. A watchdog thread polls every 500 ms; on expiry the engine cancels the query (`cmd.Cancel()`, then a `conn.Dispose()` backstop that interrupts even pure formula-engine queries). The Python watchdog is the sole timeout enforcement — server-side `CommandTimeout` is deliberately `0`. Set to 0 to disable (not recommended). |
+| `smoke_test_timeout_ms` | `10000` | `SMOKE_TEST_TIMEOUT_MS` | Per-measure pre-flight smoke test cap. Runs `EVALUATE ROW("r", [Measure])` per unique measure; failures are skipped in the main run (`status:"skipped"`) so a single runaway can't take down the sweep. |
+| `memory_threshold_pct` | `80` | `MEMORY_THRESHOLD_PCT` | Memory watchdog trip point as a true % of **actual** total RAM (read via `GlobalMemoryStatusEx` — no hard-coded denominator, so no per-machine scaling needed). **Mid-query:** 3 consecutive critical polls (1.5 s sustained) before cancelling, so transient spikes don't abort legitimate queries. **Between-test:** no debounce — a single critical reading aborts the rest of the run (`status:"aborted_memory"`). Set to 0 to disable both. |
+| `skip_on_smoke_failure` | `true` | `SKIP_ON_SMOKE_FAILURE` | When `true`, measures failing the smoke test are skipped (one `Type: smoketest_*` log entry + one `"status":"skipped"` row per dimension permutation in the timing CSV). Set to `false` to attempt every measure and rely on the wall-clock + memory watchdogs at runtime. |
 
-**Why the smoke test is on by default:** earlier benchmark runs (v3 and prior) on large measure lists hit machine-crashing runaway queries — measures whose grand-total alone allocated unbounded memory. Smoke testing each measure once with a tight timeout catches those before they enter the main loop, where a wall-clock timeout would still let the query consume RAM for ~60 s.
+**Why the smoke test is on by default:** earlier benchmark runs on large measure lists hit machine-crashing runaway queries — measures whose grand-total alone allocated unbounded memory. Smoke testing each measure once with a tight timeout catches those before they enter the main loop, where a wall-clock timeout would still let the query consume RAM for ~60 s.
 
-### How smoke-test skipping works internally
-
-The smoke loop builds an in-memory `HashSet<string> skippedMeasures` and a `Dictionary<string,string> smokeResults` (measure → failure reason). Nothing is written to disk for smoke failures except (a) one `Type: smoketest_*` entry per failed measure in `{label}-timeouts.log`, and (b) one `"status":"skipped"` row per dimension permutation in the timing CSV (all sharing the same skip reason).
-
-**Mechanism check:** setting `SMOKE_TEST_TIMEOUT_MS` to 200–500 ms via env var is a quick way to test the smoke pipeline end-to-end — most measures fail at that timeout and the run short-circuits with skipped rows in the CSV. Useful for verifying the smoke pipeline without waiting for a real broken measure.
-
-### RAM Scaling
-
-The memory watchdog uses a hard-coded 16 GB denominator (WMI/VisualBasic.Devices not guaranteed in TE3 scripting). Scale the threshold proportionally for your machine:
-
-| Machine RAM | Recommended `memoryThresholdPct` |
-|---|---|
-| 16 GB | 80% |
-| 32 GB | 40% |
-| 64 GB | 20% |
+**Mechanism check:** setting `SMOKE_TEST_TIMEOUT_MS` to 200–500 ms is a quick way to test the smoke pipeline end-to-end — most measures fail at that timeout and the run short-circuits with skipped rows in the CSV, without waiting for a real broken measure.
 
 ### XMLA Limitations
 
-- The Power BI service (XMLA endpoint) enforces its own query cap (~225s). `queryTimeoutMs > 225000` has no effect.
+- The Power BI service (XMLA endpoint) enforces its own query cap (~225 s). `query_timeout_ms > 225000` has no effect.
 - The memory watchdog is meaningful only for local PBIP workspace connections. In XMLA mode, model memory lives on the Fabric capacity and is invisible to this client-side check.
 
 ---
 
 ## Phase 4: Run and Interpret Results
 
-### 4.1 User Runs the Script
+### 4.1 Run the Sweep
 
-The user runs the script in TE3 connected to the target model. Outputs:
+```bash
+python scripts/benchmark_measures.py --config output/{label}.config.json
+```
+
+Outputs in `output/benchmark/`:
 - `{label}-timing.csv` — the primary deliverable
 - `{label}-config.csv` — filter context reference for validation
-- `{label}-testplan.json` — pre-flight manifest of planned test cases (v5+); survives a force-kill so the user can identify which test was in flight
+- `{label}-testplan.json` — pre-flight manifest of planned test cases; survives a force-kill so you can identify which test was in flight
+- `{label}-summary.txt` — run summary (also printed to stdout): Top 10 Slowest (ok-only), smoke-skipped measures, and Timed Out Queries
 - `{label}-errors.log` — only if errors occurred
-- `{label}-timeouts.log` — only if any queries timed out OR any measures failed the smoke test (v5+); each entry tagged with `Type:` (memory_watchdog \| query_timeout \| smoketest_timeout \| smoketest_error \| query_error) and `Reason:` (full error message)
-- `Info()` popup with summary including Top 10 Slowest (ok-only), smoke-skipped measures, and Timed Out Queries sections
+- `{label}-timeouts.log` — only if any queries timed out OR any measures failed the smoke test; each entry tagged with `Type:` (memory_watchdog \| query_timeout \| smoketest_timeout \| smoketest_error \| query_error) and `Reason:` (full error message)
 
 ### 4.2 Interpreting the Timing CSV
 
@@ -336,15 +346,15 @@ The CSV has columns: `test_id, measure, context, status, row_count, duration_ms,
 |---|---|
 | `ok` | Query completed successfully |
 | `error` | Query errored (DAX reference error, missing relationship, etc.) |
-| `timeout` | Query was cancelled mid-flight — either wall-clock (`queryTimeoutMs`) OR sustained memory pressure (memory watchdog). `duration_ms ≈ queryTimeoutMs` for wall-clock, ~1.5 s for memory-cancel. The two cancellation paths are distinguished by the `Type:` tag in `{label}-timeouts.log`. |
-| `skipped` | Measure failed the pre-flight smoke test (v5+). One row per dimension permutation with `duration_ms = 0`. |
+| `timeout` | Query was cancelled mid-flight — either wall-clock (`query_timeout_ms`) OR sustained memory pressure (memory watchdog). `duration_ms ≈ query_timeout_ms` for wall-clock, ~1.5 s for memory-cancel. The two cancellation paths are distinguished by the `Type:` tag in `{label}-timeouts.log`. |
+| `skipped` | Measure failed the pre-flight smoke test. One row per dimension permutation with `duration_ms = 0`. |
 | `aborted_memory` | The whole run was aborted by the between-test memory check before this test ran. `duration_ms = 0`. |
 
-**Benchmark philosophy — runaways are filtered, then timeouts are data.** v5+ runs a pre-flight smoke test (`EVALUATE ROW("r", [Measure])` per measure, default ON) so a single broken or runaway measure can't take down the benchmark sweep. Measures that pass smoke testing then run normally; if they time out under a richer dimension context, that IS the timing data — it tells you the measure is pathologically slow under those filters. Triage timeouts using `{label}-timeouts.log` (read the `Type:` tag first), and triage skipped measures the same way.
+**Benchmark philosophy — runaways are filtered, then timeouts are data.** The engine runs a pre-flight smoke test (`EVALUATE ROW("r", [Measure])` per measure, default ON) so a single broken or runaway measure can't take down the benchmark sweep. Measures that pass smoke testing then run normally; if they time out under a richer dimension context, that IS the timing data — it tells you the measure is pathologically slow under those filters. Triage timeouts using `{label}-timeouts.log` (read the `Type:` tag first), and triage skipped measures the same way.
 
 Guide the user through analysis:
 
-**Sort by `duration_ms` descending** to find the slowest queries. The Top 10 from the `Info()` popup gives a quick view, but the CSV allows deeper analysis. **Wall-clock timeouts** cluster at the top (`duration_ms ≈ queryTimeoutMs`) and are clearly distinguishable from legitimate slow queries. **Memory-watchdog cancels** appear with `duration_ms ≈ 1.5–3 s` (cancelled as soon as sustained memory pressure was detected) — short duration but `status:"timeout"`. Read the `Type:` tag in `{label}-timeouts.log` to disambiguate.
+**Sort by `duration_ms` descending** to find the slowest queries. The Top 10 in `{label}-summary.txt` gives a quick view, but the CSV allows deeper analysis. **Wall-clock timeouts** cluster at the top (`duration_ms ≈ query_timeout_ms`) and are clearly distinguishable from legitimate slow queries. **Memory-watchdog cancels** appear with `duration_ms ≈ 1.5–3 s` (cancelled as soon as sustained memory pressure was detected) — short duration but `status:"timeout"`. Read the `Type:` tag in `{label}-timeouts.log` to disambiguate.
 
 **Group by `measure`** to see which measures are consistently slow across all contexts vs. slow only in specific contexts:
 - Slow everywhere → likely an expensive base calculation (nested iterators, complex CALCULATE chains)
@@ -440,9 +450,9 @@ All columns in one SUMMARIZECOLUMNS. TREATAS filter arguments constrain specific
 
 ### Global Filters
 
-When `globalFilters` is non-empty, they're applied as TREATAS filter arguments inside SUMMARIZECOLUMNS (or inside the CALCULATETABLE wrapper for grand_total). This restricts the iteration space — matching how Power BI passes report-level slicer selections.
+When `global_filters` is non-empty, they're applied as TREATAS filter arguments inside SUMMARIZECOLUMNS (or inside the CALCULATETABLE wrapper for grand_total). This restricts the iteration space — matching how Power BI passes report-level slicer selections.
 
-### Smoke Test (v5+)
+### Smoke Test
 
 For each unique measure, the pre-flight smoke test runs:
 
@@ -454,28 +464,31 @@ No filters, no grouping. Just verifies the measure can return *something* withou
 
 ### EVALUATE prefix
 
-The DAX construction block builds bare table expressions; the `EVALUATE` prefix is added at the call site (`ExecuteDaxWithTimeout("EVALUATE " + dax, ...)`). The smoke test query is the only place where the construction itself includes `EVALUATE` because it's a complete query, not a building block.
+The engine builds bare table expressions; the `EVALUATE` prefix is added at the call site when the query runs. The smoke test query is the only place where the construction itself includes `EVALUATE` because it's a complete query, not a building block.
 
 ---
 
 ## File Outputs
 
+Written to `output/benchmark/` by default (override with `output_dir` / `OUTPUT_DIR`):
+
 | File | Source | Purpose |
 |---|---|---|
-| `benchmark-measures.csx` | Template from `scripts/benchmark-measures.csx`, with configuration sections populated by Claude | TE3 script — runs DAX, writes timing CSV |
-| `{label}-timing.csv` | Generated by `.csx` when user runs it | Per-test-case timing: `test_id, measure, context, status, row_count, duration_ms, distinct_values`. Status values: `ok`, `error`, `timeout`, `skipped`, `aborted_memory`. |
-| `{label}-config.csv` | Generated alongside the timing CSV | Filter context reference: lists every global filter, single-slice dimension, and cross-product column with its TREATAS values for manual validation. |
-| `{label}-testplan.json` | Generated by `.csx` pre-flight (v5+) | Planned test order written before the main loop starts; survives a force-kill so you can identify which test was in flight. |
-| `{label}-errors.log` | Generated by `.csx` if errors occur | Full exception details per failed test case. |
-| `{label}-timeouts.log` | Generated by `.csx` if timeouts OR smoke failures occur (v5+) | One entry per timeout/smoke-failure with `testId \| measure \| context \| duration_ms`, `Type:` (memory_watchdog \| query_timeout \| smoketest_timeout \| smoketest_error \| query_error), `Reason:` (full error text), and full DAX. Smoke failures use synthetic test_ids `s0001..sNNNN`. Paste the DAX into DAX Studio for triage. |
+| `output/{label}.config.json` | Claude (per session) | The benchmark contract: `measures`, dimensions, filters, `max_rows_per_context`. |
+| `{label}-timing.csv` | `benchmark_measures.py` | Per-test-case timing: `test_id, measure, context, status, row_count, duration_ms, distinct_values`. Status values: `ok`, `error`, `timeout`, `skipped`, `aborted_memory`. |
+| `{label}-config.csv` | `benchmark_measures.py` | Filter context reference: every global filter, single-slice dimension, and cross-product column with its TREATAS values, for manual validation. |
+| `{label}-testplan.json` | `benchmark_measures.py` (pre-flight) | Planned test order, written before the main loop; survives a force-kill so you can identify which test was in flight. |
+| `{label}-summary.txt` | `benchmark_measures.py` | Run summary (also stdout): Top 10 Slowest, smoke-skipped, Timed Out Queries. |
+| `{label}-errors.log` | `benchmark_measures.py` (if errors) | Full exception details per failed test case. |
+| `{label}-timeouts.log` | `benchmark_measures.py` (if timeouts/smoke failures) | One entry per timeout/smoke-failure with `testId \| measure \| context \| duration_ms`, `Type:` (memory_watchdog \| query_timeout \| smoketest_timeout \| smoketest_error \| query_error), `Reason:`, and full DAX. Smoke failures use synthetic test_ids `s0001..sNNNN`. Paste the DAX into DAX Studio for triage. |
 
-Output directory: `Desktop\PBI-Benchmark\` (configurable via `outputDir` or `OUTPUT_DIR` env var).
+`scripts/benchmark_measures.py` (+ the `scripts/pbi_capture/` engine) is stable, tested code — never edited per session.
 
 ---
 
 ## Quick Reference: User Interaction Points
 
-At minimum, the user must confirm these before Claude generates the script:
+At minimum, the user must confirm these before Claude generates the config:
 
 | Decision Point | What Claude proposes | User confirms or adjusts |
 |---|---|---|
@@ -510,10 +523,10 @@ Claude:
   5. Presents dimension config:
      - Single-slice: by_col_a, by_month, by_col_c
      - Cross-product: Column A × Month × Column C, TREATAS Column C = "Value 1"
-     - Global: 'Date'[Start of Year] = DATE(2025, 1, 1)
+     - Global: 'Date'[Year] → ["2025"]  (TREATAS)
      - TOPN: 0
   6. User confirms
-  7. Generates script: 25 measures × (1 + 3 + 1) = 125 test cases
-  8. User runs in TE3, gets timing CSV + Top 10 Slowest in Info popup
-  9. User shares CSV or Top 10, Claude helps prioritize optimization targets
+  7. Writes output/benchmark.config.json: 25 measures × (1 + 3 + 1) = 125 test cases
+  8. Runs `python scripts/benchmark_measures.py --config ...`; timing CSV + Top 10 Slowest in {label}-summary.txt
+  9. Claude reads the CSV/summary and helps prioritize optimization targets
 ```

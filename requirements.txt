@@ -1,0 +1,5 @@
+# Runtime dependencies for the Power BI Assistant scripts.
+# pythonnet — loads the Analysis Services client DLLs (TOM + ADOMD) via the CLR.
+# openpyxl  — writes the regression-report.xlsx comparison workbook.
+pythonnet>=3.1,<4
+openpyxl>=3.1

@@ -1,6 +1,5 @@
 """CLI: export a live PBI Desktop model's schema to markdown via TOM — no
-Tabular Editor required. See
-docs/superpowers/plans/2026-06-14-tom-schema-export-spec.md.
+Tabular Editor required. See the README ("Export a live model's schema").
 
 Usage:
   python scripts/export_schema.py [--connection-string S | --port N]

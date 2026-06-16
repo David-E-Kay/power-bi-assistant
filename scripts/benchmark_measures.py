@@ -4,7 +4,7 @@
 Usage:
     python scripts/benchmark_measures.py --config output/sweep.config.json
 
-Config schema: docs/superpowers/plans/2026-06-10-te-free-capture-spec.md.
+Config schema: docs/config-schema.md.
 Env overrides (BENCHMARK_LABEL, OUTPUT_DIR, QUERY_TIMEOUT_MS, ...) match the
 retired benchmark-measures.csx. Exit codes: 0 = run completed, 2 = fatal.
 """
