@@ -735,6 +735,25 @@ def main():
                     + value_counts["error_refac"]
                     + value_counts["timeout_refac"]
                     + value_counts["aborted_refac"]) > 0
+
+    # Desktop toast (best-effort; keeps the comparator runnable standalone even
+    # if the pbi_capture package is not importable). Click opens the xlsx.
+    try:
+        from pathlib import Path
+        from pbi_capture.notify import send_desktop_toast
+        clean = delta_count == 0 and not has_failures
+        status = "✅ No deltas" if clean else (
+            f"⚠️ {delta_count} deltas / {timing_counts['regression']} regressions")
+        body = [f"Report: {os.path.basename(args.output)}",
+                f"Pass {value_counts['pass']} / Fail {value_counts['fail']} of {total}",
+                f"Delta=Y: {delta_count}"]
+        if total_b > 0:
+            body.append(f"Δ overall: {(total_d / total_b) * 100:+.1f}%")
+        send_desktop_toast(f"PBI Regression Compare — {status}", body,
+                           launch_uri=Path(args.output).resolve().as_uri())
+    except Exception:
+        pass
+
     return 1 if has_failures else 0
 
 
