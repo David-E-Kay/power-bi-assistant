@@ -24,6 +24,9 @@ The skills are built to **chain into one loop**, not just stand alone:
 
 In short: the data-goblin **`power-bi-agentic-development`** plugin supplies the *targeted, single-domain* skills (DAX, TMDL, BPA, C# scripting, Fabric); this project adds the *cross-skill workflows* (benchmarking, regression testing, refactor orchestration) and the model-learning knowledge base on top.
 
+**Deep-dive guides** — the two most involved workflows have full developer walkthroughs:
+[Regression-testing developer guide](docs/guides/regression-testing-developer-guide.md) · [Measure-benchmarking developer guide](docs/guides/measure-benchmarking-developer-guide.md) · config-key reference in [docs/config-schema.md](docs/config-schema.md).
+
 ## Prerequisites
 
 - **Claude Code** (CLI, desktop, or IDE extension) — open this folder as a project.
@@ -51,11 +54,13 @@ python scripts/pbi_capture/provision_libs.py
 
 ## Usage
 
-Open the folder in Claude Code and ask for Power BI help directly — the skills and `CLAUDE.md` instructions activate automatically. The scripts below can also be run on their own.
+**The intended way to drive this project is conversation, not hand-editing.** Open the folder in Claude Code and describe what you want — *"export the schema of the model I have open"*, *"regression-test this measure change"*, *"benchmark these five measures by month and product"*. Claude activates the right skill, **authors and edits the JSON config and fills in the command blocks for you**, then runs them. The configs and measure lists shown below are illustrations of what Claude generates — you don't write or edit them by hand.
+
+You *can* run every script yourself (they're plain CLIs, documented below) and nothing stops you, but you never *have* to: the edits to the code blocks are LLM-driven.
 
 ### Export a live model's schema (no Tabular Editor)
 
-With a model **open in Power BI Desktop**:
+Ask Claude to export the schema of the model you have open, or run it yourself. With a model **open in Power BI Desktop**:
 
 ```bash
 python scripts/export_schema.py
@@ -98,11 +103,11 @@ The config is pure data — test cases plus a dimension map, no DAX strings:
 }
 ```
 
-Measure names are **bare** (no brackets); the engine builds the `SUMMARIZECOLUMNS` queries, runs them under a safety stack (smoke test, wall-clock timeout, memory watchdog), and serializes the snapshot. `compare-snapshots.py` then produces a six-sheet `regression-report.xlsx` flagging every value delta and timing regression. Full key reference: [`docs/config-schema.md`](docs/config-schema.md).
+Measure names are **bare** (no brackets); the engine builds the `SUMMARIZECOLUMNS` queries, runs them under a safety stack (smoke test, wall-clock timeout, memory watchdog), and serializes the snapshot. `compare-snapshots.py` then produces a six-sheet `regression-report.xlsx` flagging every value delta and timing regression. Full key reference: [`docs/config-schema.md`](docs/config-schema.md); end-to-end walkthrough: [regression-testing developer guide](docs/guides/regression-testing-developer-guide.md).
 
 ### Benchmark measure performance
 
-Find the slowest measures for optimization triage (timing only — no value capture), via the [`measure-benchmarking`](.claude/skills/measure-benchmarking/SKILL.md) skill:
+Find the slowest measures for optimization triage (timing only — no value capture), via the [`measure-benchmarking`](.claude/skills/measure-benchmarking/SKILL.md) skill ([developer guide](docs/guides/measure-benchmarking-developer-guide.md)):
 
 ```bash
 python scripts/benchmark_measures.py --config output/sweep.config.json
@@ -117,7 +122,7 @@ python scripts/benchmark_measures.py --config output/sweep.config.json
 }
 ```
 
-Writes a per-test `{label}-timing.csv` and a Top-10-slowest summary to `output/benchmark/`.
+The human-facing deliverable is a styled Excel report — **`{label}-report.xlsx`** in `output/benchmark/`, built to match the regression report — with sheets **Summary · All Tests · By Measure · Slowest · False-Fast Warnings**. That `.xlsx` is the one to open and review. The run also drops the supporting raw files alongside it — `{label}-timing.csv` (per-test rows), `{label}-config.csv` (an echo of the dimension map), and `{label}-summary.txt` (the console recap, including the top-5 slowest) — but you don't need to read those. As with capture, the timing harness runs under the same safety stack (smoke test, wall-clock timeout, memory watchdog).
 
 ### Ask for a Tabular Editor (`.csx`) script
 
@@ -146,12 +151,36 @@ Beyond running scripts, the workspace accumulates **behavioral knowledge** so ad
 
 The result: instead of generic DAX advice, you get guidance grounded in *your* model's quirks, its history, and your team's conventions.
 
+## Why it works this way
+
+A few choices are deliberate. Each one trades raw LLM autonomy for **lower cost, determinism, and safety** — the properties that matter when you're touching a production semantic model.
+
+### Parsed schema snapshots over live model reads
+
+Claude works from a compact **markdown snapshot** of the model (`export_schema.py` / `bim_to_kb_markdown.py`) and retrieves from it on demand, rather than streaming the raw model into context. The reason is token economics. A raw `.bim` for even a *medium* model is on the order of **~26k lines of JSON ≈ ~210k tokens** — that exceeds a standard context window before any actual work begins. Large models blow well past it; and even when a model technically fits, the sheer volume invites **context rot**, where the LLM loses track of schema details it "read" thousands of tokens earlier and starts giving advice grounded in the wrong table. The parsed markdown is small, structured for retrieval, and cached — so lookups are cheap, repeatable, and don't crowd out the task itself. (See [How the assistant learns your models](#how-the-assistant-learns-your-models).)
+
+### Tabular Editor scripts over MCP for model changes
+
+When a change *mutates* the model — DAX edits, relationships, calc groups, structural refactors — the default is a **Tabular Editor C# script**, not a live MCP write. Code beats tokens here on every axis:
+
+- **Cheaper** — the change runs as deterministic code the engine executes, not as LLM tokens spent driving the model object-by-object.
+- **Deterministic & auditable** — the script *is* the change; you can read exactly what it will do before anything happens.
+- **Reviewable & reversible** — open it in Tabular Editor, eyeball the diff, and **roll it back** if it's wrong, before you commit.
+- **Reusable** — re-run it across environments, or replay it after a refresh.
+
+A live **Power BI MCP** is still wired up and used — for *inspection*, metadata discovery, validation, and the occasional explicitly-approved low-risk single-object edit. It remains the **fallback**, not the default path for mutations.
+
+### Memory-guarded local execution
+
+Capture and benchmark runs execute DAX against the model open on **your machine**, so the engine protects local hardware. A **memory watchdog** reads *real* physical RAM (via the Windows `GlobalMemoryStatusEx` call) and aborts the run when this process plus all `msmdsrv` (Analysis Services) working sets cross a threshold — **80% by default** — so a runaway cross-product sweep can't quietly page your machine into the ground. It rides alongside the rest of the safety stack: a **smoke test** that skips measures which error on a trivial query, and a **wall-clock timeout** (60s default) that cancels the command and disposes the connection as a backstop. Long runs also fire a **desktop toast on completion**, so you don't have to babysit them.
+
 ## Project layout
 
 ```
 CLAUDE.md                  Project instructions Claude follows in this workspace
 .claude/skills/            Project-level skills (parsing, benchmarking, regression, etc.)
 knowledge/                 Curated KB: DAX patterns, modeling standards, per-model findings
+docs/                      Developer guides (regression, benchmarking) + config-schema reference
 scripts/                   Python + C# automation
   pbi_capture/             TE-free TOM/ADOMD engine: provisioning, discovery, schema export, query execution
   export_schema.py         CLI: live model -> schema markdown
@@ -168,7 +197,6 @@ libs/                      NuGet-provisioned AS client DLLs (git-ignored; create
 
 - **Machine-local config is not committed.** `.claude/settings.local.json` and `.claude/.mcp.json` are git-ignored — configure your own MCP servers and local settings.
 - **Generated artifacts stay local.** `libs/`, `output/`, and generated `artifacts/model-schema/model-schema-*.md` are git-ignored so the repo stays clean and portable.
-- **Roadmap.** A desktop-notification option for long-running capture / benchmark runs is planned.
 
 ## License
 
