@@ -31,3 +31,7 @@ artifacts/model-schema/model-schema-*.md
 .mcp-servers/
 analysis-services.powerbi-modeling-mcp-*.vsix
 .mcp.json
+
+# Power BI work created in this project but not part of the Assistant repo
+scripts/install_tabular_editor_script_library_te2.csx
+tests/test_te_script_installer.py
