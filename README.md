@@ -11,6 +11,19 @@ The project ships:
 - **A curated knowledge base** (`knowledge/`) of validated DAX patterns and team modeling standards, extended per-model as you onboard models.
 - **Python + C# automation** (`scripts/`) — including a **Tabular-Editor-free** path to export a live model's schema and run DAX against an open Power BI Desktop instance, using the Analysis Services client libraries provisioned straight from NuGet.
 
+## Contents
+
+- **[An end-to-end model workflow](#an-end-to-end-model-workflow)** — how the skills chain into one loop (author → benchmark → regression-test → refactor → re-validate).
+- **[Prerequisites](#prerequisites)** — what you need installed (Claude Code, Python, Power BI Desktop, the data-goblin plugin).
+- **[Setup](#setup)** — clone, install dependencies, provision the Analysis Services DLLs.
+- **[Usage](#usage)** — drive it by chat; the CLIs for schema export, regression testing, and benchmarking.
+- **[How the assistant learns your models](#how-the-assistant-learns-your-models)** — the per-model knowledge base, session learning loop, and cached schema snapshots.
+- **[Why it works this way](#why-it-works-this-way)** — the design rationale: parsed schema vs. live reads, **Tabular Editor scripts over MCP**, and the **memory watchdog**.
+- **[Tuning the defaults](#tuning-the-defaults)** — editable run knobs (the 80% watchdog threshold, timeouts) and the two ways to change them.
+- **[Project layout](#project-layout)** — what lives where in the repo.
+- **[Notes](#notes)** — gitignore boundaries and machine-local config.
+- **[License](#license)** — MIT.
+
 ## An end-to-end model workflow
 
 The skills are built to **chain into one loop**, not just stand alone:
