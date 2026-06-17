@@ -41,12 +41,11 @@
     comment which path is being activated and why the default path doesn't work
   - **Filter rationale:** When KEEPFILTERS, REMOVEFILTERS, or ALL appear, comment
     what filter behavior is being controlled and why
-  - **Branch logic:** When IF/SWITCH branches exist (e.g., proportionate vs.
-    non-proportionate), comment what each branch handles
+  - **Branch logic:** When IF/SWITCH branches exist (e.g., current vs. prior
+    period, detail vs. total), comment what each branch handles
   - **Performance choice:** When a pattern was chosen for performance reasons
     (e.g., ADDCOLUMNS single-pass instead of AVERAGEX), note the trade-off
-  - **Business logic:** When the DAX encodes a business rule (e.g., excluding
-    disposed properties, applying ownership weighting), state the rule
+  - **Business logic:** When the DAX encodes a business rule, state the rule
 - Use `// ---` separator comments to visually group logical sections in
   long measures (5+ lines of logic)
 - Do NOT comment obvious DAX (e.g., `// sum the amount` above `SUM(...)`)

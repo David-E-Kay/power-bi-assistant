@@ -22,7 +22,7 @@ Routing manifest for project KB and skill files. Use this index FIRST when looki
 
 | File | Lines | Access Pattern | Re-index Trigger |
 |---|---:|---|---|
-| `pbi-dax-patterns.md` | ~310 | direct-read (transferable patterns) | File changes |
+| `pbi-dax-patterns.md` | ~130 | direct-read (transferable seed patterns) | File changes |
 | `pbi-modeling-standards.md` | ~113 | direct-read (team-wide) | File changes |
 
 **Per-model naming convention:** Per-model behavioral KB files use a `{model}-` prefix — `{model}-gotchas.md`, `{model}-dax-performance.md`, `{model}-design-decisions.md` (e.g., `sales-gotchas.md`, `inventory-design-decisions.md`). They are **created on demand** when a model is onboarded — **none ship by default**. Files without a model prefix (`pbi-*`) are team-wide or transferable across models.

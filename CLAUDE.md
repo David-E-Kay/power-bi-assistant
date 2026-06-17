@@ -199,6 +199,19 @@ Nothing new for: design-decisions, modeling-standards
 
 Good entries are reusable, non-obvious, specific, and validated. Skip generic DAX knowledge, one-off debugging states, and unconfirmed structural facts.
 
+**Where it lands — and the bar for shipping it:**
+- **Transferable, model-agnostic patterns** → the shared `knowledge/pbi-dax-patterns.md`.
+  The bar here is high: include a pattern only when it is **100% valid, genuinely reusable
+  across models, and free of any company- or model-specific business logic**. When in doubt,
+  keep it out of the shared file.
+- **Model-specific findings** (a measure's quirk, a relationship trap, an optimization tied
+  to one model's grain) → that model's per-model KB files (`{model}-dax-performance.md`,
+  `{model}-gotchas.md`, `{model}-design-decisions.md`) — created on demand via this loop,
+  never mixed into the shared `pbi-*` files.
+
+The shared `pbi-*` files ship as a small curated **seed**, not a dumping ground — most
+knowledge should accumulate per-model through the loop rather than be pre-populated.
+
 ---
 
 ## Script Execution
