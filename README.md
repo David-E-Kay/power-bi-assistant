@@ -172,7 +172,41 @@ A live **Power BI MCP** is still wired up and used — for *inspection*, metadat
 
 ### Memory-guarded local execution
 
-Capture and benchmark runs execute DAX against the model open on **your machine**, so the engine protects local hardware. A **memory watchdog** reads *real* physical RAM (via the Windows `GlobalMemoryStatusEx` call) and aborts the run when this process plus all `msmdsrv` (Analysis Services) working sets cross a threshold — **80% by default** — so a runaway cross-product sweep can't quietly page your machine into the ground. It rides alongside the rest of the safety stack: a **smoke test** that skips measures which error on a trivial query, and a **wall-clock timeout** (60s default) that cancels the command and disposes the connection as a backstop. Long runs also fire a **desktop toast on completion**, so you don't have to babysit them.
+Capture and benchmark runs execute DAX against the model open on **your machine**, so the engine protects local hardware. A **memory watchdog** reads *real* physical RAM (via the Windows `GlobalMemoryStatusEx` call) and aborts the run when this process plus all `msmdsrv` (Analysis Services) working sets cross a threshold — **80% by default** — so a runaway cross-product sweep can't quietly page your machine into the ground. It rides alongside the rest of the safety stack: a **smoke test** that skips measures which error on a trivial query, and a **wall-clock timeout** (60s default) that cancels the command and disposes the connection as a backstop. Long runs also fire a **desktop toast on completion**, so you don't have to babysit them. All three are tunable — see below.
+
+## Tuning the defaults
+
+Those safety/behavior defaults are **shared by both capture and benchmark** and every one is editable. The most common to change is the watchdog's **80%** memory threshold:
+
+| Knob | Default | Config key / env var | What it does |
+|---|---|---|---|
+| Memory abort threshold | `80` (% of RAM) | `memory_threshold_pct` / `MEMORY_THRESHOLD_PCT` | Aborts when (this process + all `msmdsrv`) working sets cross it. **Set `0` to disable the watchdog.** |
+| Query timeout | `60000` ms | `query_timeout_ms` / `QUERY_TIMEOUT_MS` | Per-query wall-clock cap before cancel + connection dispose. |
+| Smoke-test timeout | `10000` ms | `smoke_test_timeout_ms` / `SMOKE_TEST_TIMEOUT_MS` | Time budget for the trivial smoke query run against each measure. |
+| Skip on smoke failure | `true` | `skip_on_smoke_failure` / `SKIP_ON_SMOKE_FAILURE` | Drop measures that error on the smoke query instead of running them. |
+| Diagnostic dry run | `false` | `diagnostic_mode` / `DIAGNOSTIC_MODE` (or `--diagnostic`) | Cap the run to the first 8 tests for a quick sanity check. |
+
+Two ways to set them:
+
+**1. In the config JSON** (persistent, per-config) — add the key alongside the rest. Just tell Claude *"set the memory threshold to 70 and the timeout to 2 minutes"* and it edits the file; or do it by hand:
+
+```json
+{
+  "workflow": "benchmark",
+  "memory_threshold_pct": 70,
+  "query_timeout_ms": 120000,
+  "measures": ["Total Sales", "Margin %"]
+}
+```
+
+**2. As an environment variable** (a one-off override for a single run, no file edit):
+
+```bash
+MEMORY_THRESHOLD_PCT=70 QUERY_TIMEOUT_MS=120000 python scripts/benchmark_measures.py --config output/sweep.config.json   # bash
+$env:MEMORY_THRESHOLD_PCT=70; python scripts/benchmark_measures.py --config output/sweep.config.json                      # PowerShell
+```
+
+Precedence, highest wins: **CLI flag → environment variable → config file → built-in default.** The complete key reference — including the `connection` / `--port`, `--label`, and `output_dir` overrides — is in [`docs/config-schema.md`](docs/config-schema.md).
 
 ## Project layout
 
