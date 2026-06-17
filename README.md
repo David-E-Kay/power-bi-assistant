@@ -17,12 +17,12 @@ The skills are built to **chain into one loop**, not just stand alone:
 
 > author / optimize DAX → **benchmark** → **regression-test** → **refactor topology** → re-validate
 
-- **Authoring & optimization** — the data-goblin `semantic-models:dax` skill plus the DAX review checklist in `CLAUDE.md`.
+- **Authoring & optimization** — the [data-goblin](https://github.com/data-goblin/power-bi-agentic-development) `semantic-models:dax` skill plus the DAX review checklist in `CLAUDE.md`.
 - **Benchmarking** — [`measure-benchmarking`](.claude/skills/measure-benchmarking/SKILL.md) profiles a measure set to find the slowest queries.
 - **Regression testing** — [`regression-testing`](.claude/skills/regression-testing/SKILL.md) proves a change didn't alter results.
 - **Refactoring** — [`refactor-strategy`](.claude/skills/refactor-strategy/SKILL.md) is the **orchestrator**: it diagnoses a topology bottleneck and **delegates to the data-goblin skills** to assess and execute the fix — `semantic-models:dax` for the trace / SE–FE decision, `tabular-editor:bpa-rules` to flag bidirectional / inactive / unused relationships, and `tabular-editor:c-sharp-scripting` for the TOM relationship and DAX edits — then hands back to `regression-testing` to verify parity.
 
-In short: the data-goblin **`power-bi-agentic-development`** plugin supplies the *targeted, single-domain* skills (DAX, TMDL, BPA, C# scripting, Fabric); this project adds the *cross-skill workflows* (benchmarking, regression testing, refactor orchestration) and the model-learning knowledge base on top.
+In short: the data-goblin **[`power-bi-agentic-development`](https://github.com/data-goblin/power-bi-agentic-development)** plugin supplies the *targeted, single-domain* skills (DAX, TMDL, BPA, C# scripting, Fabric); this project adds the *cross-skill workflows* (benchmarking, regression testing, refactor orchestration) and the model-learning knowledge base on top.
 
 **Deep-dive guides** — the two most involved workflows have full developer walkthroughs:
 [Regression-testing developer guide](docs/guides/regression-testing-developer-guide.md) · [Measure-benchmarking developer guide](docs/guides/measure-benchmarking-developer-guide.md) · config-key reference in [docs/config-schema.md](docs/config-schema.md).
@@ -32,7 +32,7 @@ In short: the data-goblin **`power-bi-agentic-development`** plugin supplies the
 - **Claude Code** (CLI, desktop, or IDE extension) — open this folder as a project.
 - **Python 3.9+** (developed and tested on 3.14).
 - **Power BI Desktop** (Windows) — required only for the *live* features (schema export and DAX execution against an open model). The offline `.bim` parsing path needs neither Power BI nor an internet connection.
-- *(Recommended)* the data-goblin **`power-bi-agentic-development`** Claude Code plugin, which supplies the DAX / TMDL / C#-scripting / BPA / Fabric domain skills that `CLAUDE.md` routes to. Install it from the Claude Code marketplace. Most of the project works without it (with reduced coverage), but the **`refactor-strategy`** skill *requires* it — its topology refactors delegate to `semantic-models:dax`, `tabular-editor:bpa-rules`, and `tabular-editor:c-sharp-scripting`.
+- *(Recommended)* the data-goblin **[`power-bi-agentic-development`](https://github.com/data-goblin/power-bi-agentic-development)** Claude Code plugin, which supplies the DAX / TMDL / C#-scripting / BPA / Fabric domain skills that `CLAUDE.md` routes to. Install it from the Claude Code marketplace. Most of the project works without it (with reduced coverage), but the **`refactor-strategy`** skill *requires* it — its topology refactors delegate to `semantic-models:dax`, `tabular-editor:bpa-rules`, and `tabular-editor:c-sharp-scripting`.
 
 ## Setup
 
