@@ -1,0 +1,25 @@
+name: docs-check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  docs-consistency:
+    # Windows runner to match the existing CI matrix (tests.yml) and the
+    # Windows-targeted toolchain. The checks themselves are OS-agnostic (stdlib
+    # + jsonschema), but git pathspec/check-ignore behavior is kept consistent.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Documentation-consistency checks
+        run: python scripts/ci/check_docs.py

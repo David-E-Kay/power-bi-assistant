@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Power-BI-Assistant/schemas/capture-config.schema.json",
+  "title": "Capture config",
+  "description": "Regression-snapshot config for scripts/capture_snapshot.py. Mirrors CaptureConfig in scripts/pbi_capture/config.py; that module's validate_capture remains the authority for cross-field rules JSON Schema can't express (test id uniqueness, context-in-group_by_columns).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["workflow", "tests"],
+  "properties": {
+    "workflow": { "const": "capture" },
+    "label": {
+      "type": "string",
+      "description": "Output filename prefix. Default \"run\"."
+    },
+    "output_dir": {
+      "type": "string",
+      "description": "Where outputs are written. Default output/regression."
+    },
+    "connection": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Leave empty to auto-discover the local msmdsrv instance.",
+      "properties": {
+        "connection_string": { "type": ["string", "null"] },
+        "port": { "type": ["integer", "null"] }
+      }
+    },
+    "max_rows_per_context": {
+      "const": 0,
+      "description": "Capture hard-rejects any non-zero value: a TOPN row cap silently truncates dimension combinations and is unstable across runs. Row caps are a benchmark-only knob."
+    },
+    "query_timeout_ms": {
+      "type": "integer",
+      "description": "Per-query wall-clock cap. Default 60000."
+    },
+    "smoke_test_timeout_ms": {
+      "type": "integer",
+      "description": "Per-measure pre-flight smoke-test cap. Default 10000."
+    },
+    "memory_threshold_pct": {
+      "type": "number",
+      "description": "Memory-watchdog trip point, as a % of actual total RAM. Default 80.0. Set 0 to disable."
+    },
+    "skip_on_smoke_failure": {
+      "type": "boolean",
+      "description": "Skip measures that fail the smoke test. Default true."
+    },
+    "diagnostic_mode": {
+      "type": "boolean",
+      "description": "Run only the first 8 tests. Default false."
+    },
+    "model_name": {
+      "type": "string",
+      "description": "Written into the snapshot header; used as the report title by compare-snapshots.py."
+    },
+    "global_filters": {
+      "type": "array",
+      "description": "DAX boolean expressions, each applied as KEEPFILTERS inside a CALCULATE around the measure.",
+      "items": { "type": "string" }
+    },
+    "tests": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Test cases. Each test.id must be unique — uniqueness is enforced by validate_capture, not this schema.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "measure", "context"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]+$"
+          },
+          "measure": {
+            "type": "string",
+            "pattern": "^[^\\[\\]]+$",
+            "description": "Bare measure name — no brackets. The engine adds [..] itself."
+          },
+          "context": {
+            "type": "string",
+            "description": "\"grand_total\" or a key present in group_by_columns (validated by validate_capture)."
+          }
+        }
+      }
+    },
+    "group_by_columns": {
+      "type": "object",
+      "description": "Context name -> DAX column(s). A single 'Table'[Column], or |-separated columns for a cross-product.",
+      "additionalProperties": { "type": "string" }
+    }
+  }
+}

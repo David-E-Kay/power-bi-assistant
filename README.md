@@ -43,7 +43,7 @@ In short: the data-goblin **[`power-bi-agentic-development`](https://github.com/
 ## Prerequisites
 
 - **Claude Code** (CLI, desktop, or IDE extension) — open this folder as a project.
-- **Python 3.9+** (developed and tested on 3.14).
+- **Python 3.10+** (developed and tested on 3.14).
 - **Power BI Desktop** (Windows) — required only for the *live* features (schema export and DAX execution against an open model). The offline `.bim` parsing path needs neither Power BI nor an internet connection.
 - *(Recommended)* the data-goblin **[`power-bi-agentic-development`](https://github.com/data-goblin/power-bi-agentic-development)** Claude Code plugin, which supplies the DAX / TMDL / C#-scripting / BPA / Fabric domain skills that `CLAUDE.md` routes to. Install it from the Claude Code marketplace. Most of the project works without it (with reduced coverage), but the **`refactor-strategy`** skill *requires* it — its topology refactors delegate to `semantic-models:dax`, `tabular-editor:bpa-rules`, and `tabular-editor:c-sharp-scripting`.
 

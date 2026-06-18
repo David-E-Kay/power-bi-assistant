@@ -1,3 +1,4 @@
 # Dev/test dependencies: the runtime set plus the test runner.
 -r requirements.txt
 pytest>=8
+jsonschema>=4   # validates the JSON Schemas in schemas/ and the doc config examples

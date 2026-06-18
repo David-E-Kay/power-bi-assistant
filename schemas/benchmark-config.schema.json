@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Power-BI-Assistant/schemas/benchmark-config.schema.json",
+  "title": "Benchmark config",
+  "description": "Timing-sweep config for scripts/benchmark_measures.py. Mirrors BenchmarkConfig in scripts/pbi_capture/config.py; that module's validate_benchmark remains the authority for cross-field rules JSON Schema can't express (every cross_product_value_filters key must also appear in cross_product_columns).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["workflow", "measures"],
+  "properties": {
+    "workflow": { "const": "benchmark" },
+    "label": {
+      "type": "string",
+      "description": "Output filename prefix. Default \"run\"."
+    },
+    "output_dir": {
+      "type": "string",
+      "description": "Where outputs are written. Default output/benchmark."
+    },
+    "connection": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Leave empty to auto-discover the local msmdsrv instance.",
+      "properties": {
+        "connection_string": { "type": ["string", "null"] },
+        "port": { "type": ["integer", "null"] }
+      }
+    },
+    "max_rows_per_context": {
+      "type": "integer",
+      "description": "TOPN row cap per context. Default 0 (no cap). Benchmark may use a positive cap."
+    },
+    "query_timeout_ms": {
+      "type": "integer",
+      "description": "Per-query wall-clock cap. Default 60000."
+    },
+    "smoke_test_timeout_ms": {
+      "type": "integer",
+      "description": "Per-measure pre-flight smoke-test cap. Default 10000."
+    },
+    "memory_threshold_pct": {
+      "type": "number",
+      "description": "Memory-watchdog trip point, as a % of actual total RAM. Default 80.0. Set 0 to disable."
+    },
+    "skip_on_smoke_failure": {
+      "type": "boolean",
+      "description": "Skip measures that fail the smoke test. Default true."
+    },
+    "diagnostic_mode": {
+      "type": "boolean",
+      "description": "Run only the first 8 tests. Default false."
+    },
+    "measures": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Bare measure names (no brackets).",
+      "items": {
+        "type": "string",
+        "pattern": "^[^\\[\\]]+$"
+      }
+    },
+    "single_slice_dimensions": {
+      "type": "object",
+      "description": "Label -> DAX column. One query per dimension per measure.",
+      "additionalProperties": { "type": "string" }
+    },
+    "cross_product_columns": {
+      "type": "array",
+      "description": "DAX columns combined into one SUMMARIZECOLUMNS (matrix-visual shape).",
+      "items": { "type": "string" }
+    },
+    "cross_product_value_filters": {
+      "type": "object",
+      "description": "Column -> list of values, applied as TREATAS within the cross-product. Every key must also appear in cross_product_columns (enforced by validate_benchmark, not this schema).",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    },
+    "global_filters": {
+      "type": "object",
+      "description": "Column -> list of values, applied as TREATAS to every query. NOTE: differs from the capture workflow, where global_filters is an array of DAX boolean strings.",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    }
+  }
+}
