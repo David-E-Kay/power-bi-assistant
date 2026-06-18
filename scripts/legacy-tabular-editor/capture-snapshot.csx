@@ -33,7 +33,6 @@
 //             MODEL_NAME            → modelName            (e.g. "Sales")
 //             DIAGNOSTIC_MODE       → diagnosticMode       ("true" / "false")
 //             OUTPUT_DIR            → outputDir            (full path)
-//             TEAMS_WEBHOOK_URL     → teamsWebhookUrl      (full URL)
 //             QUERY_TIMEOUT_MS      → queryTimeoutMs       (default: 60000, in milliseconds)
 //             SMOKE_TEST_TIMEOUT_MS → smokeTestTimeoutMs   (default: 10000)
 //             MEMORY_THRESHOLD_PCT  → memoryThresholdPct   (default: 80, percent)
@@ -95,13 +94,6 @@ var globalFilters = new List<string>
 // high-cardinality dimensions like a name/ID column.
 //
 var maxRowsPerContext = 0;   // 0 = no limit; e.g. 5 = cap at 5 rows per test
-
-// Teams notification — paste your Power Automate incoming webhook URL below.
-// Leave blank to skip notification. To create one:
-//   Teams channel → "+" → Workflows → "Post to a channel when a webhook request
-//   is received" → copy the URL it generates
-var teamsWebhookUrl = System.Environment.GetEnvironmentVariable("TEAMS_WEBHOOK_URL")
-    ?? "https://your-webhook-url";
 
 var outputDir = System.Environment.GetEnvironmentVariable("OUTPUT_DIR")
     ?? System.IO.Path.Combine(
@@ -1043,51 +1035,5 @@ if (timeoutCount > 0)
 if (memoryAborted)
     report.AppendLine($"  ⚠ Run ABORTED due to memory threshold ({memoryThresholdPct}%)");
 report.AppendLine("════════════════════════════════════════════════════════════");
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// TEAMS NOTIFICATION
-// ═══════════════════════════════════════════════════════════════════════════════
-if (!string.IsNullOrWhiteSpace(teamsWebhookUrl))
-{
-    try
-    {
-        var isClean = errCount == 0 && timeoutCount == 0 && skipCount == 0 && abortedMemoryCount == 0;
-        var status = isClean ? "✅ All Passed" :
-            $"⚠️ {errCount} errors / {timeoutCount} timeouts / {skipCount} skipped" +
-            (abortedMemoryCount > 0 ? $" / {abortedMemoryCount} aborted" : "");
-        var cardJson = "{"
-            + "\"type\": \"message\","
-            + "\"attachments\": [{"
-            + "\"contentType\": \"application/vnd.microsoft.card.adaptive\","
-            + "\"content\": {"
-            + "\"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\","
-            + "\"type\": \"AdaptiveCard\","
-            + "\"version\": \"1.4\","
-            + "\"body\": ["
-            + "{\"type\": \"TextBlock\", \"text\": \"PBI Regression Test Complete\", \"weight\": \"Bolder\", \"size\": \"Medium\"},"
-            + "{\"type\": \"FactSet\", \"facts\": ["
-            + "{\"title\": \"Label\", \"value\": \"" + snapshotLabel + "\"},"
-            + "{\"title\": \"Status\", \"value\": \"" + status + "\"},"
-            + "{\"title\": \"Tests\", \"value\": \"" + okCount + " OK / " + errCount + " errors / " + timeoutCount + " timeouts / " + total + " total\"},"
-            + "{\"title\": \"Duration\", \"value\": \"" + sw.Elapsed.TotalMinutes.ToString("F1") + " min\"}"
-            + (skipCount > 0 ? ",{\"title\": \"Skipped\", \"value\": \"" + skipCount + " (smoke test)\"}" : "")
-            + (abortedMemoryCount > 0 ? ",{\"title\": \"Aborted (memory)\", \"value\": \"" + abortedMemoryCount + "\"}" : "")
-            + "]}"
-            + "]"
-            + "}"
-            + "}]"
-            + "}";
-
-        using (var client = new System.Net.WebClient())
-        {
-            client.Headers[System.Net.HttpRequestHeader.ContentType] = "application/json";
-            client.UploadString(teamsWebhookUrl, cardJson);
-        }
-    }
-    catch (Exception webhookEx)
-    {
-        report.AppendLine($"  ⚠ Teams notification failed: {webhookEx.Message}");
-    }
-}
 
 Info(report.ToString());

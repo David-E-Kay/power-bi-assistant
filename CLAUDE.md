@@ -4,7 +4,7 @@ You are operating inside a Power BI workspace project. Every conversation here i
 
 You maintain a behavioral knowledge base (KB) of the user's models — performance findings, DAX gotchas, validated patterns, design decisions, and team standards. The KB lives in the `knowledge/` directory and the `.claude/skills/` directory.
 
-**Routing rules:** Use `knowledge/knowledge-index.md` first when you need to find something. Read small curated files directly. For large generated artifacts (model schema dumps in `artifacts/model-schema/`, BPA/VertiPaq exports, DAX Studio query plans, regression-diff JSON in `output/`), use the `powerbi-context-mode` skill (`ctx_index` / `ctx_search` / `ctx_execute_file`) rather than direct `Read`.
+**Routing rules:** Use `knowledge/knowledge-index.md` first when you need to find something. Read small curated files directly. For large generated artifacts (model schema dumps in `artifacts/model-schema/`, BPA/VertiPaq exports, DAX Studio query plans, regression-diff JSON in `output/`), `Grep` to locate the target span first, then `Read` only that span with `offset`/`limit` — never full-read these files into context.
 
 ---
 
@@ -12,20 +12,19 @@ You maintain a behavioral knowledge base (KB) of the user's models — performan
 
 ```
 .claude/skills/                                 # Project-level skills (Anthropic convention: one folder per skill)
-  powerbi-context-mode/SKILL.md                 # Context Mode retrieval routing (project artifacts only)
   bim-parsing/SKILL.md                          # .bim file parsing workflow
   measure-benchmarking/SKILL.md                 # Measure performance benchmarking workflow
   refactor-strategy/SKILL.md                    # Structural model refactor workflow
   regression-testing/SKILL.md                   # Regression testing workflow
   regression-testing/references/overview.md     # Reference docs for capture-snapshot parameters
-  confluence-cache/SKILL.md                     # Confluence page cache lifecycle (grab → store → index)
+  confluence-cache/SKILL.md                     # Confluence page cache lifecycle (grab → store → manifest)
   confluence-cache/references/                  # Setup, manifest schema, troubleshooting
 knowledge/                                      # Curated KB (gotchas, patterns, performance, standards) — flat, small files
   knowledge-index.md                            # Routing manifest: access pattern per file
   confluence/                                   # Cached Confluence pages (OPTIONAL — managed by confluence-cache skill)
     _manifest.yaml                              # Source of truth for cached pages (empty template by default)
 artifacts/                                      # Generated files (model-schema dumps, reports)
-  model-schema/                                 # Parsed `.bim` markdown dumps (Context Mode index targets)
+  model-schema/                                 # Parsed `.bim` markdown dumps (Grep-then-targeted-Read targets)
 scripts/                                        # Runnable automation (Python, C# .csx)
 output/                                         # Session deliverables (regression scripts, diagnostics)
 ```
@@ -48,15 +47,15 @@ Two layers handle Power BI work in this project:
 | Fabric CLI / workspace ops | `fabric-cli:fabric-cli` |
 | Lineage / Power Query / refresh / naming / model review | `semantic-models:*` |
 
-**`powerbi-context-mode` skill** (project-local) owns *retrieval over project-specific large artifacts* — only:
+**Targeted retrieval over project-specific large artifacts** — for these, `Grep` to locate the target table/measure/relationship first, then `Read` only that span with `offset`/`limit`; never full-read them into context:
 - `artifacts/model-schema/*.md` (parsed `.bim` snapshots, when live TE CLI is unavailable)
 - Large diagnostics in `output/` (BPA / VertiPaq / DAX Studio Server Timings / regression-diff JSON)
-- `knowledge/confluence/*.md` (cached team-standards pages; the `confluence-cache` skill manages writes — this one handles search)
+- `knowledge/confluence/*.md` (cached team-standards pages — small, so direct-`Read` or `Grep` across the folder; the `confluence-cache` skill manages writes)
 - Multi-file searches across `knowledge/` when needed
 
-It is a retrieval helper, not a competing workflow. See `.claude/skills/powerbi-context-mode/SKILL.md` for source-of-truth detection (TE CLI → `bim_to_kb_markdown.py` snapshot → Power BI MCP) and tool selection rules.
+For model metadata, follow the source-of-truth chain: live Tabular Editor CLI → live TOM export (`scripts/export_schema.py`) → parsed `.bim` snapshot (`bim_to_kb_markdown.py`, in `artifacts/model-schema/`) → Power BI MCP. Prefer live sources when available; flag staleness when working from a snapshot.
 
-**`confluence-cache` skill** (project-local) owns *the grab-and-curate lifecycle for Confluence pages*: resolve a page (URL/ID/title), fetch via the official Atlassian MCP in markdown format, write to `knowledge/confluence/<slug>.md`, update `_manifest.yaml`, and re-index. For ad-hoc Confluence questions that don't need caching, route directly to the live Atlassian MCP — don't invoke this skill. See `.claude/skills/confluence-cache/SKILL.md`.
+**`confluence-cache` skill** (project-local) owns *the grab-and-curate lifecycle for Confluence pages*: resolve a page (URL/ID/title), fetch via the official Atlassian MCP in markdown format, write to `knowledge/confluence/<slug>.md`, and update `_manifest.yaml`. For ad-hoc Confluence questions that don't need caching, route directly to the live Atlassian MCP — don't invoke this skill. See `.claude/skills/confluence-cache/SKILL.md`.
 
 Never modify marketplace plugin files in `~/.claude/plugins/cache/`.
 
@@ -79,27 +78,26 @@ Never modify marketplace plugin files in `~/.claude/plugins/cache/`.
 
 ### 1. Consult what you know without overloading context
 
-Start every Power BI task at `knowledge/knowledge-index.md` to identify the relevant KB file and its access pattern (direct-read vs Context Mode index/search). Direct-read for small curated files; route large generated artifacts through `powerbi-context-mode`.
+Start every Power BI task at `knowledge/knowledge-index.md` to identify the relevant KB file and its access pattern (direct-read vs Grep-then-targeted-Read). Direct-read for small curated files; for large generated artifacts, `Grep` to locate the span, then `Read` only that span with `offset`/`limit`.
 
 | Question type | File / source |
 |---|---|
 | Per-model gotchas, performance findings, design decisions | `knowledge/{model}-gotchas.md`, `knowledge/{model}-dax-performance.md`, `knowledge/{model}-design-decisions.md` (direct-read — created on demand when a model is onboarded; none ship by default) |
 | Validated DAX patterns (transferable) | `knowledge/pbi-dax-patterns.md` (direct-read) |
 | Team modeling standards (team-wide, local KB) | `knowledge/pbi-modeling-standards.md` (direct-read) |
-| Team standards published in Confluence (cached) — **optional** | `knowledge/confluence/` (Context Mode index/search). Off by default; configure via the `confluence-cache` skill to enable. For pages NOT cached, use the live Atlassian MCP. |
-| Model inventory and structure (per-model snapshot) | `artifacts/model-schema/model-schema-<model>.md` (Context Mode index/search — do not full-read) |
+| Team standards published in Confluence (cached) — **optional** | `knowledge/confluence/` (direct-read, or `Grep` across the folder). Off by default; configure via the `confluence-cache` skill to enable. For pages NOT cached, use the live Atlassian MCP. |
+| Model inventory and structure (per-model snapshot) | `artifacts/model-schema/model-schema-<model>.md` (`Grep` to locate, then targeted `Read` — do not full-read) |
 | Topology refactor orchestration (post `/dax` Tier 3, or relationship-debt cleanup) | `.claude/skills/refactor-strategy/SKILL.md` |
 | Regression testing procedures | `.claude/skills/regression-testing/SKILL.md` |
 | Measure benchmarking | `.claude/skills/measure-benchmarking/SKILL.md` |
 | .bim file parsing | `.claude/skills/bim-parsing/SKILL.md` |
 | Confluence page caching (grab/refresh/list/remove) | `.claude/skills/confluence-cache/SKILL.md` |
-| Context Mode routing | `.claude/skills/powerbi-context-mode/SKILL.md` |
 
 Use the retrieved context to give model-specific advice rather than generic guidance — e.g., if you know the `Date` table uses inactive relationships, suggest `CALCULATE` with the specific `USERELATIONSHIP` rather than a bare `CALCULATE`. For schema-derived facts, prefer live TE CLI / TOM when available; otherwise use the snapshot at `artifacts/model-schema/` and flag staleness in your answer.
 
 ### 2. Defer to data-goblin plugin skills for plugin-domain work
 
-For DAX, C# scripting / TOM, TMDL, BPA, TE CLI, live TOM, PBIR / theme, Fabric CLI, lineage, refresh, naming, and Power Query — see the Context Routing table above and follow the relevant data-goblin skill. Don't restate or reroute their workflows. `powerbi-context-mode` does not intercept those.
+For DAX, C# scripting / TOM, TMDL, BPA, TE CLI, live TOM, PBIR / theme, Fabric CLI, lineage, refresh, naming, and Power Query — see the Context Routing table above and follow the relevant data-goblin skill. Don't restate or reroute their workflows.
 
 ### 3. Answer with full context
 
@@ -224,7 +222,7 @@ You can run scripts directly in this project:
 
 Write new scripts to `scripts/`. Write output files (reports, diffs, snapshots) to `output/`.
 
-For any script, TE CLI, parser, benchmark, trace, or validation command that may produce large output, write full results to `output/` and use `powerbi-context-mode` (`ctx_execute_file` / `ctx_search`) to analyze. Return concise summaries, warnings, errors, changed object names, and file paths — not raw dumps.
+For any script, TE CLI, parser, benchmark, trace, or validation command that may produce large output, write full results to `output/` and analyze them with `Grep` + targeted `Read` (never full-read the raw dump). Return concise summaries, warnings, errors, changed object names, and file paths — not raw dumps.
 
 C# scripts (.csx) cannot be executed directly here — they run in Tabular Editor. Write them to `scripts/` or `output/` for the user to open in TE3.
 
@@ -239,7 +237,7 @@ When the user provides a `.bim` file:
 
 **Live alternative (model open, no `.bim` file):** run `python scripts/export_schema.py` to export an open Power BI Desktop model's schema directly via TOM — no Tabular Editor required. It serializes the live model to `.bim` and runs the same parser, producing the same `artifacts/model-schema/model-schema-<slug>.md`. One-time prerequisite: `python scripts/pbi_capture/provision_libs.py` (downloads the Analysis Services client DLLs into `libs/`).
 
-Generated schema markdown is a documentation/cache snapshot — do NOT read it wholesale after onboarding. Use `powerbi-context-mode` (`ctx_index` + `ctx_search`) for targeted retrieval. When live TE CLI / TOM is available, prefer it as the source of truth.
+Generated schema markdown is a documentation/cache snapshot — do NOT read it wholesale after onboarding. `Grep` to locate the target object, then `Read` only that span. When live TE CLI / TOM is available, prefer it as the source of truth.
 
 ---
 
@@ -251,4 +249,4 @@ The user may work across multiple Power BI semantic models. Always tag findings 
 
 ## Regression Testing
 
-For the full workflow, see `.claude/skills/regression-testing/SKILL.md`. Capture runs on the TE-free Python path: `python scripts/capture_snapshot.py --config output/{label}.config.json`. The engine (`scripts/pbi_capture/`) and `scripts/compare-snapshots.py` are stable and never edited per session — Claude authors only a JSON config (test cases + dimension map; schema in `docs/config-schema.md`). The retired `scripts/capture-snapshot.csx` remains available on request for Tabular Editor 3.
+For the full workflow, see `.claude/skills/regression-testing/SKILL.md`. Capture runs on the TE-free Python path: `python scripts/capture_snapshot.py --config output/{label}.config.json`. The engine (`scripts/pbi_capture/`) and `scripts/compare-snapshots.py` are stable and never edited per session — Claude authors only a JSON config (test cases + dimension map; schema in `docs/config-schema.md`). The retired `scripts/legacy-tabular-editor/capture-snapshot.csx` remains available on request for Tabular Editor 3.

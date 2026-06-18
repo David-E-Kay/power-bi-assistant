@@ -284,7 +284,7 @@ Precedence is **CLI flag > env var > config file > default**, so you never have 
 
 ### Legacy: running inside Tabular Editor 3
 
-The original implementation of this workflow was a Tabular Editor 3 C# script. It still ships as `scripts/capture-snapshot.csx` for anyone who prefers to run/step through it in the TE3 GUI (press **F5**). Ask Claude to emit it — raw or pre-populated with your `modelName`, `testLines`, and `groupByColumns`. It writes the **same** snapshot schema, so the `compare-snapshots.py` step is identical. This is an opt-in path; the Python runner above is the default and needs no Tabular Editor install.
+The original implementation of this workflow was a Tabular Editor 3 C# script. It still ships as `scripts/legacy-tabular-editor/capture-snapshot.csx` for anyone who prefers to run/step through it in the TE3 GUI (press **F5**). Ask Claude to emit it — raw or pre-populated with your `modelName`, `testLines`, and `groupByColumns`. It writes the **same** snapshot schema, so the `compare-snapshots.py` step is identical. This is an opt-in path; the Python runner above is the default and needs no Tabular Editor install.
 
 ---
 

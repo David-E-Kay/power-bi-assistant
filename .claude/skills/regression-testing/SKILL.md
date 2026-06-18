@@ -423,7 +423,7 @@ Each run writes to `output/regression/` (override with `OUTPUT_DIR` or `output_d
 
 #### Legacy TE3 output (on request)
 
-The Python path is the default. On explicit request, Claude can emit the retired Tabular Editor script `scripts/capture-snapshot.csx` for the user to run in TE3 (press F5) instead — either the raw template, or a copy populated with the session's `modelName`, `testLines` (`id|measure|context`), and `groupByColumns`. The `.csx` writes the same snapshot JSON schema, so `compare-snapshots.py` consumes it identically. Treat this as an opt-in legacy alternative — don't steer users to it unprompted.
+The Python path is the default. On explicit request, Claude can emit the retired Tabular Editor script `scripts/legacy-tabular-editor/capture-snapshot.csx` for the user to run in TE3 (press F5) instead — either the raw template, or a copy populated with the session's `modelName`, `testLines` (`id|measure|context`), and `groupByColumns`. The `.csx` writes the same snapshot JSON schema, so `compare-snapshots.py` consumes it identically. Treat this as an opt-in legacy alternative — don't steer users to it unprompted.
 
 ---
 
@@ -695,7 +695,7 @@ Capture writes to `output/regression/` by default (override with `output_dir` / 
 | `{label}.json` | `capture_snapshot.py` | Snapshot of model results (per-test values + timing). |
 | `{label}-testplan.json` | `capture_snapshot.py` (pre-flight) | Planned test order, written before execution; survives a force-kill so you can see which test was in flight. |
 | `{label}-timing.csv` | `capture_snapshot.py` | Lightweight per-test-case timing. |
-| `{label}-summary.txt` | `capture_snapshot.py` | The run summary (also printed to stdout); analyzable via `powerbi-context-mode`. |
+| `{label}-summary.txt` | `capture_snapshot.py` | The run summary (also printed to stdout); analyze with `Grep` + targeted `Read`. |
 | `{label}-errors.log` | `capture_snapshot.py` (if errors) | Full exception details per failed test case. |
 | `{label}-timeouts.log` | `capture_snapshot.py` (if timeouts/smoke failures) | One entry per timeout/smoke-failure with `Type:` (memory_watchdog \| query_timeout \| smoketest_timeout \| smoketest_error \| query_error), `Reason:`, and full DAX. |
 | `regression-report.xlsx` | `compare-snapshots.py` | Unified report: value deltas + timing comparison in one workbook (6 sheets). |
@@ -712,4 +712,4 @@ python scripts/compare-snapshots.py output/regression/baseline.json output/regre
 # open regression-report.xlsx — filter Delta=Y for value regressions, sort by Δ ms for performance
 ```
 
-**Legacy TE3 (on request):** Claude can instead emit `scripts/capture-snapshot.csx` (raw or populated) to run in TE3; it writes the same snapshot schema, so the comparison step is identical. Opt-in only.
+**Legacy TE3 (on request):** Claude can instead emit `scripts/legacy-tabular-editor/capture-snapshot.csx` (raw or populated) to run in TE3; it writes the same snapshot schema, so the comparison step is identical. Opt-in only.

@@ -5,7 +5,7 @@ description: "Use this skill when the user asks to 'benchmark measures', 'profil
 
 # Measure Benchmarking for Power BI Models
 
-A conversational skill that guides Claude through planning, generating, and executing measure performance benchmarks for Power BI semantic models. Benchmarks run on the TE-free Python path: `python scripts/benchmark_measures.py --config output/{label}.config.json`. The stable engine lives in the `scripts/pbi_capture/` package and is **never edited per session** — Claude authors only a JSON config (`"workflow": "benchmark"`) with the fields `measures`, `single_slice_dimensions`, `cross_product_columns`, `cross_product_value_filters`, `global_filters`, and `max_rows_per_context`. The engine builds the DAX, runs it under the safety stack, and writes the timing CSV. The retired `benchmark-measures.csx` template is still in the repo and can be emitted on request (see "Legacy TE3 output (on request)").
+A conversational skill that guides Claude through planning, generating, and executing measure performance benchmarks for Power BI semantic models. Benchmarks run on the TE-free Python path: `python scripts/benchmark_measures.py --config output/{label}.config.json`. The stable engine lives in the `scripts/pbi_capture/` package and is **never edited per session** — Claude authors only a JSON config (`"workflow": "benchmark"`) with the fields `measures`, `single_slice_dimensions`, `cross_product_columns`, `cross_product_value_filters`, `global_filters`, and `max_rows_per_context`. The engine builds the DAX, runs it under the safety stack, and writes the timing CSV. The retired `benchmark-measures.csx` template is still in the repo (under `scripts/legacy-tabular-editor/`) and can be emitted on request (see "Legacy TE3 output (on request)").
 
 ## When to Use This Skill
 
@@ -292,7 +292,7 @@ Estimated runtime: ~{T × avg_ms / 1000 / 60} minutes
 
 #### Legacy TE3 output (on request)
 
-The Python path is the default. On explicit request, Claude can emit the retired `scripts/benchmark-measures.csx` (raw or populated with the session's `measures`, `singleSliceDimensions`, `crossProductColumns`, `crossProductValueFilters`, `globalFilters`, `maxRowsPerContext`) for the user to run in TE3 (press F5). It writes the same timing CSV columns. Opt-in only — don't steer users to it unprompted.
+The Python path is the default. On explicit request, Claude can emit the retired `scripts/legacy-tabular-editor/benchmark-measures.csx` (raw or populated with the session's `measures`, `singleSliceDimensions`, `crossProductColumns`, `crossProductValueFilters`, `globalFilters`, `maxRowsPerContext`) for the user to run in TE3 (press F5). It writes the same timing CSV columns. Opt-in only — don't steer users to it unprompted.
 
 ---
 

@@ -40,7 +40,7 @@ Trigger when:
 - Step 5 of the `.bim File Onboarding` section in project instructions applies
 
 Do NOT use for:
-- Reading an existing `artifacts/model-schema/model-schema-*.md` file — use `powerbi-context-mode` (`ctx_index` + `ctx_search`) for targeted retrieval rather than full Read
+- Reading an existing `artifacts/model-schema/model-schema-*.md` file — `Grep` to locate the target object, then `Read` only that span rather than full-reading it
 - Behavioral findings like performance, gotchas, or patterns (those go in their respective `knowledge/` KB files)
 - DAX dependency analysis on a specific measure (use live TE CLI / TOM, or parse the .bim JSON inline for one-off queries)
 
@@ -76,8 +76,8 @@ If the user doesn't specify a model name, the script derives one from the .bim m
 The markdown file is now in `artifacts/model-schema/` from Step 2 — no copy/upload step needed. Tell the user:
 - The schema markdown is at `artifacts/model-schema/model-schema-<slug>.md`. It is a generated cache/snapshot.
 - Total counts (tables, columns, measures, relationships, calculation groups) for sanity check.
-- For future sessions, the `powerbi-context-mode` skill retrieves from this file via `ctx_index` + `ctx_search` rather than full Read.
-- If replacing an existing schema file, the previous version was overwritten by the `-o` flag. Re-running `ctx_index` on the same source name will refresh the index.
+- For future sessions, retrieve from this file with `Grep` + targeted `Read` rather than full-reading it.
+- If replacing an existing schema file, the previous version was overwritten by the `-o` flag.
 
 ---
 

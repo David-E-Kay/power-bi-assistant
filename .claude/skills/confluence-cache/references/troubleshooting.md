@@ -40,27 +40,19 @@ If the user wants to recover the page at its new location:
 2. If found, run Branch A on the new URL/ID.
 3. Run Branch E on the old entry to clean up.
 
-## `ctx_search` doesn't find a just-cached page
+## A just-cached page doesn't show up in `Grep`/`Read`
 
-**Symptom:** Skill reported success, file is on disk, manifest is updated, but `ctx_search` returns nothing for a phrase from the page.
+**Symptom:** Skill reported success and the manifest is updated, but a `Grep` for a phrase from the page returns nothing.
 
 **Possible causes (in likelihood order):**
 
-1. **Re-index didn't run.** Check the skill output — A.6 should have shown a `ctx_index` call. If it was skipped, run it manually:
+1. **File wasn't actually written.** Confirm `knowledge/confluence/<slug>.md` exists and has a body, not just frontmatter. If it's missing, re-run Branch A — the write step (A.4) didn't complete.
 
-   ```
-   ctx_index(path: "knowledge/confluence/")
-   ```
+2. **Search phrase is too generic or too specific.** A single common word (`"modeling"`) hits many files; an exact multi-word phrase may differ from the page's wording. Try a distinctive multi-word noun phrase that appears verbatim in the body.
 
-2. **Stale index from a prior version.** `ctx_index` is idempotent on unchanged content. If you suspect cache corruption, run it again — it's cheap.
+3. **Encoding issue in the body.** If the file looks fine but `Grep` still misses content, `Read` it and look for BOM or NUL bytes. The MCP returns clean UTF-8 markdown by default; stray bytes would indicate a downstream write issue.
 
-3. **Search phrase is too generic.** `ctx_search(["modeling"])` will hit hundreds of files. Use a distinctive multi-word phrase from the new page.
-
-4. **File was written but not flushed before re-index ran.** Rare. Run `ctx_index` once more.
-
-5. **Encoding issue in the body.** If the file looks fine but `ctx_search` still misses content, open the file in a hex viewer / `Read` tool and look for BOM or NUL bytes. The MCP returns clean UTF-8 markdown by default; this would indicate a downstream write issue.
-
-If none of the above resolve it, escalate to the user with the file path and the failing `ctx_search` query — there may be a Context Mode bug worth filing.
+If none of the above resolve it, escalate to the user with the file path and the failing `Grep` query.
 
 ## Conversion fidelity (rare but real)
 
@@ -128,7 +120,6 @@ If the cache is in an unrecoverable state:
 
 1. Delete every `.md` file in `knowledge/confluence/` (NOT `_manifest.yaml`).
 2. Reset `_manifest.yaml` `pages:` to `[]`.
-3. Run `ctx_index(path: "knowledge/confluence/")` against the now-empty folder to clear the index.
-4. Re-cache pages one at a time (Branch A) or in bulk (hand-seed manifest + Branch B).
+3. Re-cache pages one at a time (Branch A) or in bulk (hand-seed manifest + Branch B).
 
 This is a destructive operation — confirm with the user before doing it. The reset throws away whatever curation history was in the cache.

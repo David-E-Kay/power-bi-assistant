@@ -78,13 +78,12 @@ The slug becomes the filename: `knowledge/confluence/<slug>.md`. Rules in order:
 
 ### Renamed pages
 
-If a page's title changes upstream, the slug stays put — `slug` in the manifest is the authoritative filename. The `title` field in both manifest and frontmatter is updated to the new title on next sync, but the file is not renamed. This avoids breaking ctx_search index entries and any external bookmarks to the file.
+If a page's title changes upstream, the slug stays put — `slug` in the manifest is the authoritative filename. The `title` field in both manifest and frontmatter is updated to the new title on next sync, but the file is not renamed. This avoids breaking any external bookmarks to the file.
 
 If the user explicitly wants to rename the file to match the new title, they can do it manually:
 
 1. Rename `knowledge/confluence/<old>.md` → `<new>.md`.
 2. Update `slug:` in both the manifest entry and the file frontmatter.
-3. Re-run `ctx_index(path: "knowledge/confluence/")`.
 
 ## Reserved slugs
 

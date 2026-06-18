@@ -7,7 +7,7 @@ A [Claude Code](https://claude.com/claude-code) workspace that turns Claude into
 The project ships:
 
 - **Behavioral instructions** (`CLAUDE.md`) that teach Claude how to work in a Power BI context — consult a knowledge base first, prefer automation over manual clicks, follow a DAX review checklist, and run a session learning loop.
-- **Project skills** (`.claude/skills/`) for `.bim` parsing, measure benchmarking, regression testing, model-refactor strategy, context-mode retrieval over large artifacts, and Confluence caching.
+- **Project skills** (`.claude/skills/`) for `.bim` parsing, measure benchmarking, regression testing, model-refactor strategy, and Confluence caching.
 - **A curated knowledge base** (`knowledge/`) of validated DAX patterns and team modeling standards, extended per-model as you onboard models.
 - **Python + C# automation** (`scripts/`) — including a **Tabular-Editor-free** path to export a live model's schema and run DAX against an open Power BI Desktop instance, using the Analysis Services client libraries provisioned straight from NuGet.
 
@@ -45,7 +45,7 @@ In short: the data-goblin **[`power-bi-agentic-development`](https://github.com/
 - **Claude Code** (CLI, desktop, or IDE extension) — open this folder as a project.
 - **Python 3.10+** (developed and tested on 3.14).
 - **Power BI Desktop** (Windows) — required only for the *live* features (schema export and DAX execution against an open model). The offline `.bim` parsing path needs neither Power BI nor an internet connection.
-- *(Recommended)* the data-goblin **[`power-bi-agentic-development`](https://github.com/data-goblin/power-bi-agentic-development)** Claude Code plugin, which supplies the DAX / TMDL / C#-scripting / BPA / Fabric domain skills that `CLAUDE.md` routes to. Install it from the Claude Code marketplace. Most of the project works without it (with reduced coverage), but the **`refactor-strategy`** skill *requires* it — its topology refactors delegate to `semantic-models:dax`, `tabular-editor:bpa-rules`, and `tabular-editor:c-sharp-scripting`.
+- *(Recommended)* the data-goblin **[`power-bi-agentic-development`](https://github.com/data-goblin/power-bi-agentic-development)** Claude Code plugin, which supplies the DAX / TMDL / C#-scripting / BPA / Fabric domain skills that `CLAUDE.md` routes to. This is an optional Claude Code marketplace plugin you install yourself — **not** a repo or pip dependency, so a "clone and install everything" pass will **not** pull it in. Install it from the marketplace only if you want the extra DAX/TMDL/BPA/C# coverage. Most of the project works without it (with reduced coverage), but the **`refactor-strategy`** skill *requires* it — its topology refactors delegate to `semantic-models:dax`, `tabular-editor:bpa-rules`, and `tabular-editor:c-sharp-scripting`.
 
 ## Setup
 
@@ -87,7 +87,7 @@ This auto-discovers the local Analysis Services instance, serializes the model t
 python scripts/bim_to_kb_markdown.py path/to/model.bim --output artifacts/model-schema/model-schema-<slug>.md
 ```
 
-Both paths produce the same markdown artifact, which Claude retrieves on demand via the `powerbi-context-mode` skill rather than reading wholesale.
+Both paths produce the same markdown artifact, which Claude retrieves on demand with `Grep` + a targeted `Read` rather than reading it wholesale.
 
 ### Regression-test a model change
 
@@ -139,7 +139,7 @@ The human-facing deliverable is a styled Excel report — **`{label}-report.xlsx
 
 ### Ask for a Tabular Editor (`.csx`) script
 
-The Python path above is the default and needs no Tabular Editor. If you'd rather run the capture or benchmark **inside Tabular Editor 3** — for example to step through it or tweak it interactively — ask Claude to emit `scripts/capture-snapshot.csx` or `scripts/benchmark-measures.csx`, either raw or pre-populated with your measures and fields. The `.csx` writes the same output schema, so the comparison and analysis steps are identical. This is an opt-in legacy path; the only real difference is the execution host (Tabular Editor vs. the TE-free Python engine).
+The Python path above is the default and needs no Tabular Editor. If you'd rather run the capture or benchmark **inside Tabular Editor 3** — for example to step through it or tweak it interactively — ask Claude to emit `scripts/legacy-tabular-editor/capture-snapshot.csx` or `scripts/legacy-tabular-editor/benchmark-measures.csx`, either raw or pre-populated with your measures and fields. The `.csx` writes the same output schema, so the comparison and analysis steps are identical. This is an opt-in legacy path; the only real difference is the execution host (Tabular Editor vs. the TE-free Python engine).
 
 ### Run the tests
 
@@ -158,8 +158,8 @@ Beyond running scripts, the workspace accumulates **behavioral knowledge** so ad
 
 - **Curated knowledge base (`knowledge/`)** — a small, curated **seed** of transferable [DAX patterns](knowledge/pbi-dax-patterns.md) and [team modeling standards](knowledge/pbi-modeling-standards.md) ships by default (intentionally lean — only model-agnostic, fully-validated patterns). As you onboard a model, Claude adds per-model files — `{model}-gotchas.md`, `{model}-dax-performance.md`, `{model}-design-decisions.md` — recording validated findings (e.g. "this key column is TEXT — cast before arithmetic", or "a prior refactor removed the bridge bidir scan, so don't re-suggest the old CROSSFILTER workaround").
 - **Session Learning Loop** — at natural breakpoints Claude surfaces what it learned (performance discoveries, gotchas, design decisions) and, on your confirmation, writes it back to `knowledge/`. See `CLAUDE.md`.
-- **Cross-session memory** — durable, frequently-referenced facts persist across all sessions, so the next conversation starts already knowing them.
-- **Schema snapshots** — `export_schema.py` / `bim_to_kb_markdown.py` cache a model's structure under `artifacts/model-schema/`; Claude retrieves from it on demand via the `powerbi-context-mode` skill instead of re-reading the whole model.
+- **Cross-session memory** *(depends on your Claude Code setup)* — if your environment provides persistent memory (user-level instructions or a memory tool), the most critical findings can carry across sessions. The committed `knowledge/` files above are the portable, repo-scoped layer that travels with the project regardless.
+- **Schema snapshots** — `export_schema.py` / `bim_to_kb_markdown.py` cache a model's structure under `artifacts/model-schema/`; Claude retrieves from it on demand with targeted `Grep` + `Read` instead of re-reading the whole model.
 - **Optional Confluence cache** — point the `confluence-cache` skill at your team's published standards to fold them into the same retrieval (off by default).
 
 The result: instead of generic DAX advice, you get guidance grounded in *your* model's quirks, its history, and your team's conventions.

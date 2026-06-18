@@ -171,7 +171,7 @@ Before Phase 1 can produce a useful measure list, Claude needs to **know your mo
 | Route | When to use it | How Claude reads it |
 |---|---|---|
 | **Live TOM export** (TE-free) | Model open in PBI Desktop | `python scripts/export_schema.py` serializes the live model to the same schema markdown |
-| **Parsed `.bim` snapshot** | You have a `.bim` on hand | `python scripts/bim_to_kb_markdown.py` → markdown in `artifacts/model-schema/`, retrieved via `powerbi-context-mode` so even large models stay out of the context window |
+| **Parsed `.bim` snapshot** | You have a `.bim` on hand | `python scripts/bim_to_kb_markdown.py` → markdown in `artifacts/model-schema/`, retrieved with `Grep` + targeted `Read` so even large models stay out of the context window |
 | **MCP server** (`powerbi-modeling-mcp`) | If you have it running | Live measure enumeration via `measure_operations` |
 
 For the `.bim` route — a **one-time setup per model**, re-run only when the schema changes meaningfully:
@@ -260,7 +260,7 @@ Precedence: **CLI flag > env var > config file > default**.
 
 ### Legacy: running inside Tabular Editor 3
 
-The original implementation was a Tabular Editor 3 C# script, still shipped as `scripts/benchmark-measures.csx`. If you'd rather run it in the TE3 GUI (press **F5**), ask Claude to emit it — raw or pre-populated with your `measures`, `singleSliceDimensions`, `crossProductColumns`, `crossProductValueFilters`, `globalFilters`, and `maxRowsPerContext`. It writes the same timing CSV columns. Opt-in; the Python runner is the default and needs no Tabular Editor install.
+The original implementation was a Tabular Editor 3 C# script, still shipped as `scripts/legacy-tabular-editor/benchmark-measures.csx`. If you'd rather run it in the TE3 GUI (press **F5**), ask Claude to emit it — raw or pre-populated with your `measures`, `singleSliceDimensions`, `crossProductColumns`, `crossProductValueFilters`, `globalFilters`, and `maxRowsPerContext`. It writes the same timing CSV columns. Opt-in; the Python runner is the default and needs no Tabular Editor install.
 
 ---
 

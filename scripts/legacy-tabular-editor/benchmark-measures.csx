@@ -46,7 +46,6 @@
 //             BENCHMARK_LABEL       → benchmarkLabel
 //             DIAGNOSTIC_MODE       → diagnosticMode  ("true" / "false")
 //             OUTPUT_DIR            → outputDir
-//             TEAMS_WEBHOOK_URL     → teamsWebhookUrl
 //             QUERY_TIMEOUT_MS      → queryTimeoutMs       (default: 60000)
 //             SMOKE_TEST_TIMEOUT_MS → smokeTestTimeoutMs   (default: 10000)
 //             MEMORY_THRESHOLD_PCT  → memoryThresholdPct   (default: 80, percent)
@@ -54,7 +53,6 @@
 //             SKIP_ON_SMOKE_FAILURE → skipOnSmokeTestFailure ("true" / "false")
 //           Example:
 //             set BENCHMARK_LABEL=baseline
-//             set TEAMS_WEBHOOK_URL=https://your-webhook-url
 //             TabularEditor.exe model.bim -S benchmark-measures.csx
 //
 // ROLLBACK: Read-only — no model changes made
@@ -82,7 +80,7 @@
 //         measure references (fixes blank-row inflation). distinct_values
 //         column uses last-column index instead of name match. False-fast
 //         warnings in summary report.
-//   v2 — Added distinct_values column, Teams env var.
+//   v2 — Added distinct_values column.
 //   v1 — Initial release.
 // =============================================================================
 
@@ -98,12 +96,6 @@ var _envDiag = System.Environment.GetEnvironmentVariable("DIAGNOSTIC_MODE");
 var diagnosticMode = _envDiag != null
     ? _envDiag.Equals("true", StringComparison.OrdinalIgnoreCase)
     : false;   // ← flip to true for GUI debugging
-
-// ── Teams Webhook ──────────────────────────────────────────────────────────
-// Set via TEAMS_WEBHOOK_URL env var (CLI) or paste your URL as the fallback
-// (GUI). Leave fallback blank to skip notification.
-var teamsWebhookUrl = System.Environment.GetEnvironmentVariable("TEAMS_WEBHOOK_URL")
-    ?? "https://your-webhook-url";
 
 // ── Measures ────────────────────────────────────────────────────────────────
 // Paste your measure names here, one per line. These must match the measure
@@ -1169,65 +1161,5 @@ if (falseFast.Count > 0)
 }
 
 report.AppendLine("════════════════════════════════════════════════════════════");
-
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// TEAMS NOTIFICATION
-// ═══════════════════════════════════════════════════════════════════════════════
-
-if (!string.IsNullOrWhiteSpace(teamsWebhookUrl))
-{
-    try
-    {
-        var isClean = errCount == 0 && timeoutCount == 0 && skipCount == 0 && abortedMemoryCount == 0;
-        var status = isClean ? "All Passed" :
-            $"{errCount} errors / {timeoutCount} timeouts / {skipCount} skipped" +
-            (abortedMemoryCount > 0 ? $" / {abortedMemoryCount} aborted" : "");
-
-        // Build top 5 slowest (ok-only) for the card
-        var top5Lines = timingRows
-            .Where(t => t.Item4 == "ok")
-            .OrderByDescending(t => t.Item6)
-            .Take(5)
-            .Select(t => $"{t.Item6}ms - {t.Item2} [{t.Item3}]");
-        var top5Text = string.Join("\\n", top5Lines);
-
-        var cardJson = "{"
-            + "\"type\": \"message\","
-            + "\"attachments\": [{"
-            + "\"contentType\": \"application/vnd.microsoft.card.adaptive\","
-            + "\"content\": {"
-            + "\"$schema\": \"http://adaptivecards.io/schemas/adaptive-card.json\","
-            + "\"type\": \"AdaptiveCard\","
-            + "\"version\": \"1.4\","
-            + "\"body\": ["
-            + "{\"type\": \"TextBlock\", \"text\": \"PBI Measure Benchmark Complete\", \"weight\": \"Bolder\", \"size\": \"Medium\"},"
-            + "{\"type\": \"FactSet\", \"facts\": ["
-            + "{\"title\": \"Label\", \"value\": \"" + benchmarkLabel + "\"},"
-            + "{\"title\": \"Status\", \"value\": \"" + status + "\"},"
-            + "{\"title\": \"Tests\", \"value\": \"" + okCount + " OK / " + errCount + " errors / " + timeoutCount + " timeouts / " + total + " total\"},"
-            + "{\"title\": \"Measures\", \"value\": \"" + measures.Count + "\"},"
-            + "{\"title\": \"Duration\", \"value\": \"" + sw.Elapsed.TotalMinutes.ToString("F1") + " min\"}"
-            + (skipCount > 0 ? ",{\"title\": \"Skipped\", \"value\": \"" + skipCount + " (smoke test)\"}" : "")
-            + (abortedMemoryCount > 0 ? ",{\"title\": \"Aborted (memory)\", \"value\": \"" + abortedMemoryCount + "\"}" : "")
-            + "]},"
-            + "{\"type\": \"TextBlock\", \"text\": \"Top 5 Slowest (ok only)\", \"weight\": \"Bolder\", \"spacing\": \"Medium\"},"
-            + "{\"type\": \"TextBlock\", \"text\": \"" + top5Text + "\", \"wrap\": true, \"fontType\": \"Monospace\", \"size\": \"Small\"}"
-            + "]"
-            + "}"
-            + "}]"
-            + "}";
-
-        using (var client = new System.Net.WebClient())
-        {
-            client.Headers[System.Net.HttpRequestHeader.ContentType] = "application/json";
-            client.UploadString(teamsWebhookUrl, cardJson);
-        }
-    }
-    catch (Exception webhookEx)
-    {
-        report.AppendLine($"  Teams notification failed: {webhookEx.Message}");
-    }
-}
 
 Info(report.ToString());

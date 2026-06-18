@@ -26,9 +26,9 @@ When you ask a question, Claude consults the routing manifest at `knowledge/know
 flowchart TD
     Q[User question] --> Idx[knowledge-index.md routing]
     Idx -->|"Curated standard / pattern"| LK[Local KB direct read]
-    Idx -->|"Cached Confluence page"| CC[knowledge/confluence/<br/>via Context Mode search]
+    Idx -->|"Cached Confluence page"| CC[knowledge/confluence/<br/>via Grep/Read]
     Idx -->|"Uncached Confluence or Jira"| LMCP[Live Atlassian MCP]
-    Idx -->|"Model metadata snapshot"| MS[artifacts/model-schema/<br/>via Context Mode search]
+    Idx -->|"Model metadata snapshot"| MS[artifacts/model-schema/<br/>via Grep/Read]
     Idx -->|"How-to: DAX, TMDL, BPA, deploy..."| DG[Data-goblin plugin skill]
     LK --> Ans[Answer assembled]
     CC --> Ans
@@ -53,8 +53,7 @@ flowchart TD
     Fetch --> MCP["Atlassian MCP returns<br/>title, body, lastModified, webUrl"]
     MCP --> Write["Write knowledge/confluence/slug.md<br/>with frontmatter"]
     Write --> Manifest["Update _manifest.yaml"]
-    Manifest --> Index["ctx_index knowledge/confluence/"]
-    Index --> Done(["Reply: cached → path"])
+    Manifest --> Done(["Reply: cached → path"])
 ```
 
 Developers don't run this workflow themselves — they pull cached pages when they sync the repo. For ad-hoc questions about pages **not** in the cache, Claude routes directly to `getConfluencePage` without invoking the skill, keeping the cache focused on stable, high-traffic standards.
@@ -105,8 +104,7 @@ Each skill owns a clearly-bounded slice of the workflow:
 | Skill | Owns | Where |
 |---|---|---|
 | `confluence-cache` | Confluence cache lifecycle (grab / refresh / list / find-stale / remove) | `.claude/skills/confluence-cache/` |
-| `powerbi-context-mode` | Retrieval routing for large local artifacts (`ctx_index` / `ctx_search`) | `.claude/skills/powerbi-context-mode/` |
-| `bim-parsing` | Generating model-schema markdown from `.bim` files *(live TE3 CLI access to TOM pending)* | `.claude/skills/bim-parsing/` |
+| `bim-parsing` | Generating model-schema markdown from `.bim` files (or live TOM via `export_schema.py`) | `.claude/skills/bim-parsing/` |
 | `regression-testing` | Pre/post snapshots for refactor validation | `.claude/skills/regression-testing/` |
 | `measure-benchmarking` | Profiling measure performance across contexts | `.claude/skills/measure-benchmarking/` |
 | `refactor-strategy` | Topology refactor orchestration | `.claude/skills/refactor-strategy/` |
@@ -124,8 +122,8 @@ The data-goblin plugin's skills are how-to references — they tell Claude **how
 
 ## 7. Why This Design
 
-- **Local cache** = fast `ctx_search`, offline-able, participates in retrieval alongside the rest of the KB.
+- **Local cache** = fast `Grep`/`Read`, offline-able, participates in retrieval alongside the rest of the KB.
 - **Live MCP** = always fresh, covers the long tail of pages we don't want to over-curate.
 - **Data-goblin plugin** = unchanged — orthogonal to this project's KB. Plugin skills tell Claude *how* to fix DAX, not *what* the team's policy is.
-- **Single skill (`confluence-cache`)** owns the lifecycle so the workflow is discoverable and the steps (resolve → fetch → write → manifest → re-index) can't be skipped.
+- **Single skill (`confluence-cache`)** owns the lifecycle so the workflow is discoverable and the steps (resolve → fetch → write → manifest) can't be skipped.
 - **One auth surface** (OAuth via the official Atlassian MCP) — no API tokens to rotate, no `.env` to manage.

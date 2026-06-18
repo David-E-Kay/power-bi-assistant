@@ -1,17 +1,17 @@
 ---
 name: confluence-cache
-description: "Use this skill when the user asks to cache, sync, refresh, grab, pull, add, or update a Confluence page (or 'team standards from Confluence', 'Atlassian page to KB', 'add Confluence page to knowledge'); also when asking 'what Confluence pages do we have cached', 'show cached standards', 'is the [page] cache stale', or to remove a cached page. Encapsulates the full grab-and-curate lifecycle: resolve a page (URL/ID/title), fetch via the official Atlassian MCP in markdown format, write to knowledge/confluence/<slug>.md with version frontmatter, update knowledge/confluence/_manifest.yaml, and re-run ctx_index so the page is searchable. Does NOT trigger for ad-hoc one-off Confluence questions — those route to the live Atlassian MCP directly without going through the cache. Does NOT cache Jira tickets, comments, attachments, or whiteboards."
+description: "Use this skill when the user asks to cache, sync, refresh, grab, pull, add, or update a Confluence page (or 'team standards from Confluence', 'Atlassian page to KB', 'add Confluence page to knowledge'); also when asking 'what Confluence pages do we have cached', 'show cached standards', 'is the [page] cache stale', or to remove a cached page. Encapsulates the full grab-and-curate lifecycle: resolve a page (URL/ID/title), fetch via the official Atlassian MCP in markdown format, write to knowledge/confluence/<slug>.md with version frontmatter, and update knowledge/confluence/_manifest.yaml. Cached pages are plain files, searchable via Grep/Read — no index step. Does NOT trigger for ad-hoc one-off Confluence questions — those route to the live Atlassian MCP directly without going through the cache. Does NOT cache Jira tickets, comments, attachments, or whiteboards."
 ---
 
 # Confluence Cache Workflow
 
-A procedural skill that owns the local cache of Confluence pages used to extend this project's KB with team standards. The cache parallels `artifacts/model-schema/` — generated, committed, and indexed via Context Mode — but lives under `knowledge/` because cached standards are first-class KB content, not raw model dumps.
+A procedural skill that owns the local cache of Confluence pages used to extend this project's KB with team standards. The cache parallels `artifacts/model-schema/` — generated and committed — but lives under `knowledge/` because cached standards are first-class KB content, not raw model dumps.
 
 | Surface | Where it lives |
 |---|---|
 | Cached pages | `knowledge/confluence/<slug>.md` (one page per file, frontmatter + body) |
 | Manifest (source of truth) | `knowledge/confluence/_manifest.yaml` |
-| Routing entry | Row in `knowledge/knowledge-index.md` and a bullet in `.claude/skills/powerbi-context-mode/SKILL.md` |
+| Routing entry | Row in `knowledge/knowledge-index.md` |
 | Live access (uncached pages) | Official Atlassian MCP — used directly, not via this skill |
 
 ## When to Use This Skill
@@ -29,14 +29,14 @@ Do NOT use for:
 - Jira tickets, Confluence comments, attachments, or whiteboards.
 - Anything outside Confluence (SharePoint, Notion, Google Drive — those would each need their own skill).
 
-If you're unsure whether a page should be cached, ask the user: "Want me to cache this page so future sessions can find it via `ctx_search`, or just answer from the live MCP?"
+If you're unsure whether a page should be cached, ask the user: "Want me to cache this page so future sessions can find it via `Grep`/`Read`, or just answer from the live MCP?"
 
 ## Core Principles
 
 1. **MCP for fetch, not REST.** Use the official Atlassian MCP with `contentFormat: "markdown"` so the page comes back ready to write — no ADF/HTML conversion. OAuth is the only auth surface; no API token, no `.env`.
 2. **Manifest is the source of truth.** `_manifest.yaml` is the contract between the skill, the cache files, and humans editing by hand. Every cached page has exactly one manifest entry. Files without entries are orphans (the skill flags them).
 3. **Frontmatter records freshness.** Every cached `.md` carries `confluence_id`, `last_modified` (date string from the MCP), and `last_synced` (UTC timestamp of the cache write). The `last_modified` value drives re-fetch decisions: a re-run skips pages whose remote `lastModified` matches the cached `last_modified`. (The MCP's `getConfluencePage` returns `lastModified` as a human date string like `"Apr 10, 2026"`, not a numeric version — so we compare strings, not integers. If a page is edited twice on the same day, the `last_modified` won't change; the skill will treat it as `unchanged`. That's a known and accepted limitation; same-day double edits are rare for stable standards docs.)
-4. **Re-index after every change.** Adding, refreshing, or removing a page MUST be followed by `ctx_index(path: "knowledge/confluence/")`. Skipping the re-index silently breaks `ctx_search`. Treat the index as part of the write.
+4. **No index to maintain.** Cached pages are plain markdown files. Once written, a page is immediately searchable via `Grep`/`Read` — there's no separate index step to run or forget.
 5. **Concise reports, not body dumps.** Skill output to chat is one line per page (`updated 12 → 47`, `unchanged`, `denied: 403`, `not-found`). Page content goes to disk; the assistant summarizes if needed.
 
 ---
@@ -128,19 +128,7 @@ Use Write (not Edit) on first add; Edit (or Write to overwrite) on refresh.
 
 Add or replace the entry under `pages:` with: `id`, `space_key`, `slug`, `title`, `url`, `last_modified`, `last_synced`. Preserve the order of other entries; sort alphabetically by `slug` for consistency on first add.
 
-### A.6 Re-index
-
-```
-ctx_index(path: "knowledge/confluence/")
-```
-
-This is non-optional. Without it, `ctx_search` won't find the new page.
-
-### A.7 Smoke test
-
-Run a single `ctx_search` with a distinctive phrase from the page (a heading or a multi-word noun). Confirm the new file appears in results. If the search misses it, the index didn't pick the file up — re-run `ctx_index` and try once more before reporting failure.
-
-### A.8 Report
+### A.6 Report
 
 One line per page, plus the saved file path:
 
@@ -165,8 +153,7 @@ For each entry in `_manifest.yaml` `pages:`:
 
 After the loop:
 
-5. `ctx_index(path: "knowledge/confluence/")` once (not per-page).
-6. Report a tally: `Refresh complete: 3 updated, 7 unchanged, 0 denied, 0 not-found.`
+5. Report a tally: `Refresh complete: 3 updated, 7 unchanged, 0 denied, 0 not-found.`
 
 If any page returned `not-found`, ask the user once at the end whether to run Branch E (remove) on those entries — don't auto-remove.
 
@@ -187,7 +174,7 @@ User says: "what Confluence pages do we have cached", "show cached standards", "
    | DAX Naming Conventions         | DATA  | v12     | 12 days ago  |
    ```
 
-4. No network calls. No re-index.
+4. No network calls.
 
 ---
 
@@ -212,7 +199,6 @@ User says: "remove [page] from the cache", "drop [title] from KB", "stop trackin
 3. On approval:
    - Delete the `.md` file.
    - Edit `_manifest.yaml` to drop the `pages:` entry.
-   - `ctx_index(path: "knowledge/confluence/")` to update the index.
 4. Report: `✗ removed "<title>" from cache.`
 
 Never delete without explicit confirmation, even if the user's phrasing sounded definitive ("just nuke that page from KB"). The cost of a wrong delete is asking them to re-curate.
@@ -234,13 +220,13 @@ Detailed rules in `references/manifest-format.md`. Quick summary:
 
 ## Troubleshooting
 
-`references/troubleshooting.md` covers the common failure modes: 401/403 from MCP, page-not-found on a tracked entry, `ctx_search` not finding a just-cached page, conversion fidelity issues (rare, since markdown comes from the MCP directly), and how to recover from a corrupt manifest.
+`references/troubleshooting.md` covers the common failure modes: 401/403 from MCP, page-not-found on a tracked entry, a just-cached page not turning up in `Grep`/`Read`, conversion fidelity issues (rare, since markdown comes from the MCP directly), and how to recover from a corrupt manifest.
 
 ---
 
 ## What This Skill Does NOT Do
 
-- Edit `knowledge-index.md`, `CLAUDE.md`, or `powerbi-context-mode/SKILL.md`. Those rows exist from the one-time bootstrap; the skill assumes they're in place.
+- Edit `knowledge-index.md` or `CLAUDE.md`. Those routing rows exist from the one-time bootstrap; the skill assumes they're in place.
 - Bidirectional sync (writing pages back to Confluence). Read-only.
 - Caching attachments, images, comments, whiteboards, or Jira tickets.
 - Cache pages the OAuth user can't read. ACL denials are reported and skipped, not bypassed.

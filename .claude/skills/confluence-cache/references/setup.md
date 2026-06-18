@@ -51,16 +51,15 @@ Expected outcome:
 - Skill announces it's running, resolves the page, fetches via MCP.
 - A new file lands at `knowledge/confluence/<slug>.md` with frontmatter + body.
 - `_manifest.yaml` gains one entry under `pages:`.
-- `ctx_index` runs against `knowledge/confluence/`.
 - A one-line confirmation in chat (file path + version).
 
 Open the saved file and skim the body: headings, paragraphs, lists, code blocks, and tables should all be intact. If something looks wrong (mojibake, missing macros), check `references/troubleshooting.md` → "Conversion fidelity."
 
 ## Step 4 — Confirm routing reaches the cache
 
-Start a fresh conversation. Ask a question whose answer is in the page you just cached but is NOT in any other `knowledge/` file. Confirm Claude's response cites `knowledge/confluence/<slug>.md` (via Context Mode) rather than re-fetching via the live MCP.
+Start a fresh conversation. Ask a question whose answer is in the page you just cached but is NOT in any other `knowledge/` file. Confirm Claude's response cites `knowledge/confluence/<slug>.md` (via `Grep`/`Read`) rather than re-fetching via the live MCP.
 
-If Claude re-fetches via MCP instead, the routing rows in `knowledge/knowledge-index.md` and `.claude/skills/powerbi-context-mode/SKILL.md` aren't picking up the cache. Re-check those edits exist.
+If Claude re-fetches via MCP instead, the routing row in `knowledge/knowledge-index.md` isn't picking up the cache. Re-check that edit exists.
 
 ## Optional — Seed multiple pages at once
 
@@ -77,13 +76,12 @@ Then ask Claude:
 
 > "Refresh team standards from Confluence."
 
-The skill runs Branch B (refresh-all), back-fills every entry with full metadata, fetches the bodies, and re-indexes once at the end. Faster than asking for each page individually.
+The skill runs Branch B (refresh-all), back-fills every entry with full metadata, and fetches the bodies. Faster than asking for each page individually.
 
 ## What you should NOT need to do
 
 - Generate an Atlassian API token. (The MCP uses OAuth; no token to manage.)
 - Install Python packages. (No script, no deps.)
 - Edit `.env` or `.env.example`. (Neither file exists for this skill.)
-- Manually run `ctx_index`. (The skill does it after every change.)
 
 If a future maintenance task adds a Python sync script (e.g., for CI), this file gets a Step 5. For now, it doesn't.

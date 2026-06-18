@@ -1,6 +1,6 @@
 """Run orchestration: ports the execution engines of capture-snapshot.csx (v9)
 and benchmark-measures.csx (v5). The stdout report replaces TE's Info() popup
-and is also written to {label}-summary.txt for powerbi-context-mode analysis.
+and is also written to {label}-summary.txt for later Grep/Read analysis.
 """
 import time
 from pathlib import Path
