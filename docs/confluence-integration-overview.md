@@ -71,7 +71,7 @@ Most of what the assistant needs lives in this repo. Developers pull the latest 
 | Validated DAX patterns | Yes | `knowledge/pbi-dax-patterns.md` | Session learning loop, then committed |
 | Cached Confluence pages | Yes | `knowledge/confluence/<slug>.md` | Project lead runs `confluence-cache` skill and commits; devs sync the repo |
 | Confluence cache manifest | Yes | `knowledge/confluence/_manifest.yaml` | Updated and committed alongside cached pages |
-| `.bim` parsed snapshots *(live TE3 CLI access to TOM pending)* | Yes | `artifacts/model-schema/*.md` | Project lead runs `bim-parsing` skill and commits |
+| `.bim` parsed snapshots | **No** — git-ignored, regenerable | `artifacts/model-schema/*.md` | Generated locally via `export_schema.py` (live TOM) or the `bim-parsing` skill |
 | Confluence pages NOT in the cache | No | — | Fetched live via the Atlassian MCP at runtime |
 | Jira tickets | No | — | Fetched live via the Atlassian MCP at runtime |
 | Data-goblin plugin how-to docs | No (per-user install) | `~/.claude/plugins/cache/...` | Installed and updated by each developer |
@@ -89,7 +89,7 @@ Developers using this repo don't write to `knowledge/` or `artifacts/` directly 
 | Validated patterns for USERELATIONSHIP | Local KB | `knowledge/pbi-dax-patterns.md` |
 | Prior bridge-scan findings on this model | Local KB | `knowledge/{model}-dax-performance.md` |
 | Team standard for bridge traversal | Cached Confluence | `knowledge/confluence/<cached-standard>.md` |
-| Actual relationship topology | `.bim` snapshot *(live TE3 CLI pending)* | `artifacts/model-schema/model-schema-<model>.md` |
+| Actual relationship topology | Live TOM export or `.bim` snapshot | `artifacts/model-schema/model-schema-<model>.md` |
 | Optimization workflow (HOW to fix) | Plugin skill | `semantic-models:dax` |
 | Standard not yet cached? Fall back live | Live MCP | Atlassian `getConfluencePage` |
 

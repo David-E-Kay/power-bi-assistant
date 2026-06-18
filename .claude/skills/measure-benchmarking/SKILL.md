@@ -265,10 +265,14 @@ Example skeleton:
 
 ### 3.2 Validation Before Running
 
-Before running, verify (the engine also validates and rejects violations):
-- Every measure name matches a model measure (if a `.bim`/schema is available) and is **bare** (no brackets).
+The engine validates and **rejects** these on load (`validate_benchmark` in `scripts/pbi_capture/config.py`):
+- `label` and `measures` are non-empty.
+- Every measure name is **bare** — no brackets (the engine adds `[...]`).
+- Every key in `cross_product_value_filters` also appears in `cross_product_columns`.
+
+Claude should **also** verify these before running (not engine-enforced):
+- Every measure name matches a model measure (if a `.bim`/schema is available).
 - Every column reference uses `'Table'[Column]` syntax.
-- Every key in `cross_product_value_filters` also appears in `cross_product_columns` (the validator rejects orphans).
 - No duplicate measures; `single_slice_dimensions` labels are unique snake_case.
 
 ### 3.3 Run It
@@ -329,7 +333,8 @@ python scripts/benchmark_measures.py --config output/{label}.config.json
 ```
 
 Outputs in `output/benchmark/`:
-- `{label}-timing.csv` — the primary deliverable
+- `{label}-report.xlsx` — **the primary deliverable**: a styled Excel report (sheets: Summary · All Tests · By Measure · Slowest · False-Fast Warnings) — the one to open and review.
+- `{label}-timing.csv` — supporting raw per-test timing data
 - `{label}-config.csv` — filter context reference for validation
 - `{label}-testplan.json` — pre-flight manifest of planned test cases; survives a force-kill so you can identify which test was in flight
 - `{label}-summary.txt` — run summary (also printed to stdout): Top 10 Slowest (ok-only), smoke-skipped measures, and Timed Out Queries
@@ -475,6 +480,7 @@ Written to `output/benchmark/` by default (override with `output_dir` / `OUTPUT_
 | File | Source | Purpose |
 |---|---|---|
 | `output/{label}.config.json` | Claude (per session) | The benchmark contract: `measures`, dimensions, filters, `max_rows_per_context`. |
+| `{label}-report.xlsx` | `benchmark_measures.py` | **Primary deliverable** — styled Excel report (sheets: Summary · All Tests · By Measure · Slowest · False-Fast Warnings), mirroring the regression report. |
 | `{label}-timing.csv` | `benchmark_measures.py` | Per-test-case timing: `test_id, measure, context, status, row_count, duration_ms, distinct_values`. Status values: `ok`, `error`, `timeout`, `skipped`, `aborted_memory`. |
 | `{label}-config.csv` | `benchmark_measures.py` | Filter context reference: every global filter, single-slice dimension, and cross-product column with its TREATAS values, for manual validation. |
 | `{label}-testplan.json` | `benchmark_measures.py` (pre-flight) | Planned test order, written before the main loop; survives a force-kill so you can identify which test was in flight. |

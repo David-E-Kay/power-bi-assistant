@@ -5,7 +5,7 @@ compare-snapshots.py — Unified regression test & timing comparison
 Compares two JSON snapshots produced by capture-snapshot.csx and outputs
 a single formatted .xlsx covering both value parity and performance timing.
 
-Dependencies: openpyxl (auto-installed on first run if missing)
+Dependencies: openpyxl (declared in requirements.txt)
 
 Usage:
     python compare-snapshots.py baseline.json refactored.json [--output regression-report.xlsx]
@@ -35,12 +35,9 @@ try:
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
 except ImportError:
-    import subprocess
-    print("Installing openpyxl...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "openpyxl", "--quiet"])
-    from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-    from openpyxl.utils import get_column_letter
+    sys.exit("openpyxl is required for the Excel report. Install it with:\n"
+             "    pip install -r requirements.txt\n"
+             "(or directly: pip install openpyxl)")
 
 # ═════════════════════════════════════════════════════════════════════════════
 # CONFIGURATION

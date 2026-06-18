@@ -320,8 +320,8 @@ def _report_launch_uri(report_path: Path):
 
 def _status_emoji(is_clean: bool) -> str:
     """Toast-title status glyph, matching the capture path's convention.
-    Used only in the desktop-toast title — the benchmark `status` string
-    (shared with the Teams card) stays emoji-free."""
+    Used only in the desktop-toast title; the benchmark `status` string
+    stays emoji-free."""
     return "✅" if is_clean else "⚠️"
 
 

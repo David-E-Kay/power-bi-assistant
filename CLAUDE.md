@@ -191,7 +191,7 @@ Nothing new for: design-decisions, modeling-standards
 
 **Update KB files directly.** You have write access to `knowledge/` and `.claude/skills/`. Edit the appropriate file in place — append the new finding in the existing format. No download/re-upload cycle needed.
 
-**Update memory edits** for critical, frequently-referenced findings that should persist across all projects.
+**Persist the durable ones.** The committed `knowledge/` files are the portable, repo-scoped memory that ships with the project. If your Claude Code setup also provides cross-session memory (user-level `~/.claude/CLAUDE.md` or a memory tool), mirror only the most critical, frequently-referenced findings there.
 
 ### What's worth keeping
 

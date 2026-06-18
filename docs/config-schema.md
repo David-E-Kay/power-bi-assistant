@@ -1,7 +1,8 @@
 # Config Schema — capture & benchmark runners
 
-The TE-free runners are driven by a JSON config file (pure data — no DAX strings; the
-engine builds the DAX at runtime). One schema covers both workflows, selected by the
+The TE-free runners are driven by a JSON config file (pure data — no hand-written DAX
+*queries*; you supply measure names and column references, and the engine builds the
+`SUMMARIZECOLUMNS` query at runtime). One schema covers both workflows, selected by the
 `workflow` key:
 
 - `"workflow": "capture"` → `python scripts/capture_snapshot.py --config <file>` (regression snapshots)

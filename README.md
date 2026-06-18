@@ -43,7 +43,7 @@ In short: the data-goblin **[`power-bi-agentic-development`](https://github.com/
 ## Prerequisites
 
 - **Claude Code** (CLI, desktop, or IDE extension) — open this folder as a project.
-- **Python 3.10+** (developed and tested on 3.14).
+- **Python 3.10+** (developed and tested on 3.14). The engine uses PEP 604 `X | None` type syntax, which requires 3.10.
 - **Power BI Desktop** (Windows) — required only for the *live* features (schema export and DAX execution against an open model). The offline `.bim` parsing path needs neither Power BI nor an internet connection.
 - *(Recommended)* the data-goblin **[`power-bi-agentic-development`](https://github.com/data-goblin/power-bi-agentic-development)** Claude Code plugin, which supplies the DAX / TMDL / C#-scripting / BPA / Fabric domain skills that `CLAUDE.md` routes to. This is an optional Claude Code marketplace plugin you install yourself — **not** a repo or pip dependency, so a "clone and install everything" pass will **not** pull it in. Install it from the marketplace only if you want the extra DAX/TMDL/BPA/C# coverage. Most of the project works without it (with reduced coverage), but the **`refactor-strategy`** skill *requires* it — its topology refactors delegate to `semantic-models:dax`, `tabular-editor:bpa-rules`, and `tabular-editor:c-sharp-scripting`.
 
@@ -102,7 +102,7 @@ python scripts/capture_snapshot.py --config output/sales.config.json --label ref
 python scripts/compare-snapshots.py output/regression/baseline.json output/regression/refactored.json
 ```
 
-The config is pure data — test cases plus a dimension map, no DAX strings:
+The config is pure data — test cases plus a dimension map, no hand-written DAX *queries* (you supply measure names and column references; the engine builds the `SUMMARIZECOLUMNS` query):
 
 ```json
 {
@@ -244,6 +244,14 @@ libs/                      NuGet-provisioned AS client DLLs (git-ignored; create
 
 - **Machine-local config is not committed.** `.claude/settings.local.json` and `.claude/.mcp.json` are git-ignored — configure your own MCP servers and local settings.
 - **Generated artifacts stay local.** `libs/`, `output/`, and generated `artifacts/model-schema/model-schema-*.md` are git-ignored so the repo stays clean and portable.
+
+## Data & privacy
+
+This repo ships **no model data** — only generic, model-agnostic seed knowledge. As you use it, some files can accumulate **proprietary content** (model names, DAX, business terms, team standards). Know what's local vs. committed before you push:
+
+- **Git-ignored by default (never published):** `output/` (snapshots, diffs, reports), `artifacts/model-schema/model-schema-*.md` (schema dumps), `libs/`, and machine-local `.claude/settings.local.json` / `.claude/.mcp.json`.
+- **Committed if you add them:** per-model knowledge files (`knowledge/{model}-*.md`) and any cached Confluence pages (`knowledge/confluence/`) — the files most likely to contain internal detail.
+- **If you keep organization-specific knowledge, use a private fork.** Sanitize model names, DAX, and business terminology before pushing to any public remote, and confirm your org's policy allows redistributing cached Confluence content.
 
 ## License
 

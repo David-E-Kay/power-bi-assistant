@@ -453,8 +453,8 @@ The project includes `compare-snapshots.py` — a single Python script that perf
 
 ```
 Prerequisites:
-- Python 3.x
-- openpyxl is auto-installed on first run if missing
+- Python 3.10+
+- openpyxl (declared in requirements.txt: `pip install -r requirements.txt`)
 
 To run:
 1. Open a terminal in the folder containing both JSON files
