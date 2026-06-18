@@ -1,38 +1,22 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python *)",
-      "Bash(python3 *)",
-      "Bash(cat *)",
-      "Bash(ls *)",
-      "Bash(head *)",
-      "Bash(tail *)",
-      "Bash(grep *)",
-      "Bash(find *)",
-      "Bash(wc *)",
-      "Bash(diff *)",
-      "Bash(type *)",
-      "Bash(dir *)",
-      "Bash(more *)",
-      "Bash(cd *)",
-      "Bash(mkdir *)",
-      "Bash(copy *)",
-      "Bash(cp *)",
-      "Bash(git pull*)",
-      "Bash(git status*)",
-      "Bash(git log*)",
+      "Bash(python *)", "Bash(python3 *)", "Bash(cat *)", "Bash(ls *)",
+      "Bash(head *)", "Bash(tail *)", "Bash(grep *)", "Bash(find *)",
+      "Bash(wc *)", "Bash(diff *)", "Bash(type *)", "Bash(dir *)",
+      "Bash(more *)", "Bash(cd *)", "Bash(mkdir *)", "Bash(copy *)",
+      "Bash(cp *)", "Bash(git pull*)", "Bash(git status*)", "Bash(git log*)",
       "Read(*)",
-      "Write(knowledge/*)",
-      "Write(skills/*)",
+      "Write(knowledge/**)",
+      "Write(.claude/skills/**)",
       "Write(scripts/*)",
-      "Write(artifacts/*)",
-      "Write(output/*)"
+      "Write(artifacts/**)",
+      "Write(output/**)"
     ],
     "deny": [
-      "Bash(rm -rf *)",
-      "Bash(del /s *)",
-      "Bash(format *)",
-      "Write(.claude/*)"
+      "Bash(rm -rf *)", "Bash(del /s *)", "Bash(format *)",
+      "Write(.claude/settings.local.json)",
+      "Write(.claude/.mcp.json)"
     ]
   }
 }
