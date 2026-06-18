@@ -100,14 +100,13 @@ def test_infer_dim_prefix_wins_over_relationship_heuristic():
     assert bkm.infer_table_type("DimDate", {}, rels) == "dim"
 
 
-def test_infer_d_underscore_prefix_is_dead_branch():
-    # KNOWN QUIRK: name normalization does .replace("_", "") *before* the
-    # startswith("d_") test, so 'd_customer' -> 'dcustomer' and the d_ prefix
-    # can never match. Classification falls through to the relationship
-    # heuristic instead — here, many-side-only yields "fact", not "dim".
-    # Pinned intentionally so a future fix to the prefix logic trips this test.
+def test_infer_d_underscore_prefix_is_dim_over_heuristic():
+    # The 'd_' short-prefix convention marks a dimension. 'd_customer' is on the
+    # many-side here, so without the name check the heuristic would call it a
+    # fact; the prefix must win. (Earlier the name normalization stripped '_'
+    # before this test, making the d_ branch dead code — fixed.)
     many_only = [{"fromTable": "d_customer", "toTable": "Sales"}]
-    assert bkm.infer_table_type("d_customer", {}, many_only) == "fact"
+    assert bkm.infer_table_type("d_customer", {}, many_only) == "dim"
 
 
 def test_infer_heuristic_many_side_only_is_fact():

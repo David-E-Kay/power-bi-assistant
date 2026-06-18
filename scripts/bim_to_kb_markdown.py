@@ -60,7 +60,7 @@ CROSSFILTER_MAP = {
 # ── Table type inference ─────────────────────────────────────────────────────
 
 def infer_table_type(table_name, table_obj, relationships):
-    name_lower = table_name.lower().replace(" ", "").replace("_", "")
+    name_lower = table_name.lower().replace(" ", "")
 
     if table_obj.get("calculationGroup"):
         return "calc"
