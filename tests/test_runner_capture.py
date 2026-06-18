@@ -24,11 +24,3 @@ def test_smoke_type_classification():
     assert runner._smoke_type("timeout", "memory threshold 80% ...") == "memory_watchdog"
     assert runner._smoke_type("timeout", "wall-clock timeout ...") == "smoketest_timeout"
     assert runner._smoke_type("error", "syntax error") == "smoketest_error"
-
-
-def test_adaptive_card_shape():
-    card = runner._adaptive_card("Title", [("Label", "x"), ("Status", "ok")])
-    content = card["attachments"][0]["content"]
-    assert content["type"] == "AdaptiveCard"
-    assert content["body"][0]["text"] == "Title"
-    assert content["body"][1]["facts"][1] == {"title": "Status", "value": "ok"}

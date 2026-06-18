@@ -2,9 +2,7 @@
 and benchmark-measures.csx (v5). The stdout report replaces TE's Info() popup
 and is also written to {label}-summary.txt for powerbi-context-mode analysis.
 """
-import json
 import time
-import urllib.request
 from pathlib import Path
 
 from . import daxgen
@@ -65,32 +63,6 @@ def _run_smoke(conn_str, measures, cfg, measure_ref_fn, timeout_log):
                 f"s{idx:04d}", m, "smoke_test", elapsed,
                 _smoke_type(res.status, reason), reason, dax))
     return skipped, smoke_results
-
-
-def _adaptive_card(title: str, facts: list[tuple[str, str]], extra_blocks=None) -> dict:
-    body = [{"type": "TextBlock", "text": title, "weight": "Bolder", "size": "Medium"},
-            {"type": "FactSet",
-             "facts": [{"title": k, "value": v} for k, v in facts]}]
-    if extra_blocks:
-        body.extend(extra_blocks)
-    return {"type": "message", "attachments": [{
-        "contentType": "application/vnd.microsoft.card.adaptive",
-        "content": {"$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
-                    "type": "AdaptiveCard", "version": "1.4", "body": body}}]}
-
-
-def _send_teams_card(url, card: dict) -> str | None:
-    """Returns a warning string on failure (appended to the report), else None."""
-    if not url:
-        return None
-    try:
-        req = urllib.request.Request(
-            url, data=json.dumps(card).encode("utf-8"),
-            headers={"Content-Type": "application/json"})
-        urllib.request.urlopen(req, timeout=15).read()
-        return None
-    except Exception as ex:
-        return f"  Teams notification failed: {ex}"
 
 
 def _first_lines(entries: list[str], n_entries: int = 3) -> list[str]:
@@ -223,18 +195,6 @@ def run_capture(cfg: CaptureConfig) -> int:
         f"⚠️ {counts['error']} errors / {counts['timeout']} timeouts / "
         f"{counts['skipped']} skipped"
         + (f" / {counts['aborted_memory']} aborted" if counts["aborted_memory"] else ""))
-    facts = [("Label", cfg.label), ("Status", status),
-             ("Tests", f"{counts['ok']} OK / {counts['error']} errors / "
-                       f"{counts['timeout']} timeouts / {total} total"),
-             ("Duration", f"{total_ms / 60000:.1f} min")]
-    if counts["skipped"]:
-        facts.append(("Skipped", f"{counts['skipped']} (smoke test)"))
-    if counts["aborted_memory"]:
-        facts.append(("Aborted (memory)", str(counts["aborted_memory"])))
-    warn = _send_teams_card(cfg.teams_webhook_url,
-                            _adaptive_card("PBI Regression Test Complete", facts))
-    if warn:
-        report += warn + "\n"
     toast_warn = send_desktop_toast(
         f"PBI Regression — {status}",
         [f"Label: {cfg.label}",
@@ -479,28 +439,12 @@ def run_benchmark(cfg: BenchmarkConfig) -> int:
 
     report = _benchmark_report(cfg, counts, total, total_ms, skipped, smoke_results,
                                timing_rows, memory_aborted, out_dir, xlsx_note)
-    top5 = [f"{t['duration_ms']}ms - {t['measure']} [{t['context']}]"
-            for t in sorted((t for t in timing_rows if t["status"] == "ok"),
-                            key=lambda t: -t["duration_ms"])[:5]]
     is_clean = (counts["error"] == 0 and counts["timeout"] == 0
                 and counts["skipped"] == 0 and counts["aborted_memory"] == 0)
     status = "All Passed" if is_clean else (
         f"{counts['error']} errors / {counts['timeout']} timeouts / "
         f"{counts['skipped']} skipped"
         + (f" / {counts['aborted_memory']} aborted" if counts["aborted_memory"] else ""))
-    facts = [("Label", cfg.label), ("Status", status),
-             ("Tests", f"{counts['ok']} OK / {counts['error']} errors / "
-                       f"{counts['timeout']} timeouts / {total} total"),
-             ("Measures", str(len(cfg.measures))),
-             ("Duration", f"{total_ms / 60000:.1f} min")]
-    extra = [{"type": "TextBlock", "text": "Top 5 Slowest (ok only)",
-              "weight": "Bolder", "spacing": "Medium"},
-             {"type": "TextBlock", "text": "\n".join(top5), "wrap": True,
-              "fontType": "Monospace", "size": "Small"}] if top5 else None
-    warn = _send_teams_card(cfg.teams_webhook_url,
-                            _adaptive_card("PBI Measure Benchmark Complete", facts, extra))
-    if warn:
-        report += warn + "\n"
     report_path = (out_dir / f"{cfg.label}-report.xlsx").resolve()
     toast_warn = send_desktop_toast(
         f"PBI Benchmark — {_status_emoji(is_clean)} {status}",

@@ -34,7 +34,6 @@ class CommonConfig:
     memory_threshold_pct: float = 80.0
     skip_on_smoke_failure: bool = True
     diagnostic_mode: bool = False
-    teams_webhook_url: str | None = None
 
 
 @dataclass
@@ -63,7 +62,7 @@ class BenchmarkConfig(CommonConfig):
 
 _COMMON_KEYS = ("label", "output_dir", "max_rows_per_context", "query_timeout_ms",
                 "smoke_test_timeout_ms", "memory_threshold_pct",
-                "skip_on_smoke_failure", "diagnostic_mode", "teams_webhook_url")
+                "skip_on_smoke_failure", "diagnostic_mode")
 
 
 def _fill_common(cfg, raw, default_output_dir):
@@ -115,8 +114,6 @@ def apply_env_overrides(cfg, *, label_env: str) -> None:
         cfg.diagnostic_mode = _as_bool(env["DIAGNOSTIC_MODE"])
     if "OUTPUT_DIR" in env:
         cfg.output_dir = env["OUTPUT_DIR"]
-    if "TEAMS_WEBHOOK_URL" in env:
-        cfg.teams_webhook_url = env["TEAMS_WEBHOOK_URL"]
     if "QUERY_TIMEOUT_MS" in env:
         cfg.query_timeout_ms = int(env["QUERY_TIMEOUT_MS"])
     if "SMOKE_TEST_TIMEOUT_MS" in env:

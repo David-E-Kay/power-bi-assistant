@@ -1,7 +1,6 @@
 """Desktop toast notifications (Windows). Zero-dependency: shells PowerShell to
 show a native WinRT toast. The XML builder is pure (unit-tested); the sender is
-thin I/O. Non-fatal — a failure returns a warning string, never raises. Mirrors
-the pure-builder / I/O-sender split of _adaptive_card / _send_teams_card.
+thin I/O. Non-fatal — a failure returns a warning string, never raises.
 """
 import base64
 import subprocess
