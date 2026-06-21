@@ -16,25 +16,16 @@ The guide is organized in three concentric layers. Stop at the layer that answer
 | **Layer 2 — Mental Model + Workflow** | 2–5 | "I need to design a benchmark plan / pick the right measures and contexts" |
 | **Layer 3 — Architecture + Reference** | 6–10 | "Something failed and I need to debug, or I want to understand how this works under the hood" |
 
-```mermaid
-flowchart LR
-    A[1 - Quick Start] --> B[2 - What and Why]
-    B --> C[3 - Architecture]
-    C --> D[4 - The Toolkit]
-    D --> E[5 - Four Phases]
-    E --> F[6 - Running It]
-    F --> G[7 - How the Engine Works]
-    G --> H[8 - First-Day Walkthrough]
-    H --> I[9 - Triage]
-    I --> J[10 - Glossary]
-
-    classDef quick fill:#d4edda,stroke:#28a745
-    classDef workflow fill:#cce5ff,stroke:#004085
-    classDef reference fill:#fff3cd,stroke:#856404
-    class A quick
-    class B,C,D,E workflow
-    class F,G,H,I,J reference
-```
+1. Quick Start
+2. What Is Measure Benchmarking Here?
+3. System Architecture
+4. The Toolkit
+5. The 4-Phase Workflow
+6. Running It
+7. How the Engine Works
+8. First-Day Walkthrough
+9. Triage: Reading the Output
+10. Glossary
 
 ---
 
