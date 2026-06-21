@@ -16,27 +16,18 @@ The guide is organized in three concentric layers. Stop at the layer that answer
 | **Layer 2 — Mental Model + Workflow** | 2–6 | "I need to design a test plan / pick the right options" |
 | **Layer 3 — Architecture + Reference** | 7–12 | "Something failed and I need to debug, or I want to understand how this works under the hood" |
 
-```mermaid
-flowchart LR
-    A[1 - Quick Start] --> B[2 - What and Why]
-    B --> C[3 - Architecture]
-    C --> D[4 - The Toolkit]
-    D --> E[5 - Five Phases]
-    E --> F[6 - Running It]
-    F --> G[7 - How the Engine Works]
-    G --> H[8 - First-Day Walkthrough]
-    H --> I[9 - Triage]
-    I --> J[10 - Glossary]
-    J --> K[11 - CI]
-    K --> L[12 - Next]
-
-    classDef quick fill:#d4edda,stroke:#28a745
-    classDef workflow fill:#cce5ff,stroke:#004085
-    classDef reference fill:#fff3cd,stroke:#856404
-    class A quick
-    class B,C,D,E,F workflow
-    class G,H,I,J,K,L reference
-```
+1. Quick Start
+2. What Is Regression Testing Here?
+3. System Architecture
+4. The Toolkit
+5. The 5-Phase Workflow
+6. Running It
+7. How the Engine Works
+8. First-Day Walkthrough
+9. Triage: Reading the Report
+10. Glossary
+11. Continuous Integration
+12. Where to Go Next
 
 ---
 
@@ -162,7 +153,7 @@ The engine builds the DAX from this data and executes it. Because the config car
 
 ```mermaid
 flowchart TD
-    S[Model schema<br/>TE CLI or artifacts/model-schema/] -->|Claude writes tests +<br/>group_by_columns| O[output/{label}.config.json<br/>pure data]
+    S[Model schema<br/>TE CLI or artifacts/model-schema/] -->|Claude writes tests +<br/>group_by_columns| O["output/{label}.config.json<br/>pure data"]
     E[scripts/pbi_capture/<br/>STABLE engine] -->|capture_snapshot.py| J1[baseline.json]
     O --> J1
     O -->|same config, --label refactored| J2[refactored.json]
@@ -195,7 +186,7 @@ flowchart TD
     P1T --> P2[Phase 2<br/>Test Matrix Design]
     P2 --> P2C[Pick filter contexts<br/>grand total, by dim,<br/>by calendar, cross-product]
     P2C --> P2S[Decide measure scope<br/>explicit / random sample /<br/>by domain / by type]
-    P2S --> P2M[Write output/{label}.config.json]
+    P2S --> P2M["Write output/{label}.config.json"]
 
     P2M --> P3[Phase 3<br/>Capture Snapshots]
     P3 --> P3B[capture_snapshot.py --label baseline<br/>against ORIGINAL model]
