@@ -56,6 +56,8 @@ cd power-bi-assistant
 # 1. Python dependencies
 #    runtime only:    pip install -r requirements.txt       (pythonnet, openpyxl)
 #    with the tests:  pip install -r requirements-dev.txt   (also installs pytest)
+#    Note: requires pythonnet>=3.1 — if you have 3.0.x, pip will upgrade it.
+#    pythonnet minor bumps occasionally break other .NET tooling; use a venv to isolate.
 pip install -r requirements-dev.txt
 
 # 2. One-time: provision the Analysis Services client DLLs into libs/
@@ -244,6 +246,7 @@ libs/                      NuGet-provisioned AS client DLLs (git-ignored; create
 
 - **Machine-local config is not committed.** `.claude/settings.local.json` and `.claude/.mcp.json` are git-ignored — configure your own MCP servers and local settings.
 - **Generated artifacts stay local.** `libs/`, `output/`, and generated `artifacts/model-schema/model-schema-*.md` are git-ignored so the repo stays clean and portable.
+- **`.claude/settings.json` pre-approves Python execution.** The committed `settings.json` allows `Bash(python *)` so Claude can run scripts without per-command prompts. Review the allow-list and tighten it to your comfort level before opening this in Claude Code on a shared or untrusted machine.
 
 ## Data & privacy
 

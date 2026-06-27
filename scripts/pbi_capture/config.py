@@ -38,6 +38,7 @@ class CommonConfig:
 
 @dataclass
 class TestCase:
+    __test__ = False  # ponytail: prevents pytest from collecting this as a test class
     id: str
     measure: str
     context: str
