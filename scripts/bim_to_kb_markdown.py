@@ -297,6 +297,14 @@ def parse_bim_to_markdown(bim_path, model_id=None, model_name=None):
     def w(text=""):
         lines.append(text)
 
+    # Frontmatter (machine-parseable staleness/type metadata)
+    w("---")
+    w("type: model-schema")
+    w(f"resource: {os.path.basename(bim_path)}")
+    w(f"timestamp: {now}")
+    w("---")
+    w()
+
     # Header
     w(f"# Model Schema: {model_name}")
     w()
