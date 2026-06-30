@@ -456,7 +456,7 @@ def parse_bim_to_markdown(bim_path, model_id=None, model_name=None):
     w("## Measures")
     w()
 
-    for ttype in ["fact", "dim", "bridge"]:
+    for ttype in ["fact", "dim", "bridge", "calc"]:
         for t in sorted(tables_by_type[ttype], key=lambda x: x["name"]):
             if not t["measures"]:
                 continue
