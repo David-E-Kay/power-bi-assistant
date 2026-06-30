@@ -78,10 +78,10 @@ You *can* run every script yourself (they're plain CLIs, documented below) and n
 Ask Claude to export the schema of the model you have open, or run it yourself. With a model **open in Power BI Desktop**:
 
 ```bash
-python scripts/export_schema.py
+python scripts/export_schema.py --name "<Human Model Name>"
 ```
 
-This auto-discovers the local Analysis Services instance, serializes the model to `.bim` via TOM (written to `output/`), and renders a RAG-friendly markdown schema to `artifacts/model-schema/model-schema-<slug>.md`. Useful flags: `--port N` / `--connection-string S` to target a specific instance, `--name` to override the model name, `--md-out` / `--bim-out` for explicit paths.
+This auto-discovers the local Analysis Services instance, serializes the model to `.bim` via TOM (written to `output/`), and renders a RAG-friendly markdown schema to `artifacts/model-schema/model-schema-<slug>.md`. **Pass `--name`** — PBIP live sessions name the underlying catalog with an auto-generated GUID, not the model's display name, and the script errors out rather than writing a GUID-named markdown file. Useful flags: `--port N` / `--connection-string S` to target a specific instance, `--md-out` / `--bim-out` for explicit paths.
 
 ### Parse a `.bim` file offline
 

@@ -76,6 +76,17 @@ def test_export_schema_markdown_reuses_parser(tmp_path):
     assert "Total Sales" in text                   # measure carried through
 
 
+def test_export_schema_markdown_rejects_guid_catalog_without_name(tmp_path):
+    # PBIP live sessions name the catalog with a GUID; without --name, that GUID
+    # would otherwise become the markdown filename and model title.
+    cs = "Data Source=localhost:51234;Catalog=4efdddcf-8f13-45bb-999a-e69d42676457;"
+
+    with pytest.raises(SchemaExportError, match="auto-generated GUID"):
+        schema_export.export_schema_markdown(
+            cs, bim_out=tmp_path / "x.bim", md_out=tmp_path / "x.md",
+            serializer=lambda _conn: json.dumps(_FIXTURE_BIM))
+
+
 def test_export_schema_markdown_default_paths(tmp_path, monkeypatch):
     # With no bim_out/md_out, paths derive from _REPO_ROOT + model slug.
     monkeypatch.setattr(schema_export, "_REPO_ROOT", tmp_path)

@@ -31,6 +31,14 @@ def model_slug(name: str) -> str:
     return slug
 
 
+_GUID_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+
+def is_guid(s: str) -> bool:
+    return bool(_GUID_RE.match(s))
+
+
 def serialize_live_database(conn_str: str) -> str:
     """Connect via TOM and serialize the catalog's model to a .bim JSON string."""
     ensure_tom()
@@ -58,7 +66,14 @@ def export_schema_markdown(conn_str: str, *, name: str | None = None,
     import bim_to_kb_markdown  # on sys.path via scripts/; conftest adds it for tests
 
     bim_json = serializer(conn_str)
-    model_name = name or parse_catalog(conn_str)
+    catalog = parse_catalog(conn_str)
+    model_name = name or catalog
+    if not name and is_guid(model_name):
+        raise SchemaExportError(
+            f"Catalog name is an auto-generated GUID ({catalog}) — Power BI Desktop "
+            "doesn't expose a human-readable model name for PBIP live sessions. "
+            "Pass --name \"<Human Model Name>\" to export_schema.py."
+        )
     slug = model_slug(model_name)
 
     bim_out = Path(bim_out) if bim_out else _REPO_ROOT / "output" / f"{slug}.bim"

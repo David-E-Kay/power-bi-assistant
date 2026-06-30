@@ -18,10 +18,10 @@ The script is a **stable, tested template** in `scripts/`. Run it in place — *
 When the model is **open in Power BI Desktop** and you don't have a `.bim` on disk, produce the same artifact without Tabular Editor:
 
 ```bash
-python scripts/export_schema.py            # auto-discovers the local Desktop instance
+python scripts/export_schema.py --name "<Human Model Name>"   # auto-discovers the local Desktop instance
 ```
 
-This connects to the live model over the local Analysis Services port via TOM, serializes it to `.bim` JSON (written to `output/`), then feeds it through the **same** `bim_to_kb_markdown.py` parser — producing `artifacts/model-schema/model-schema-<slug>.md` identically. Optional flags: `--port N` / `--connection-string S` to target a specific instance, `--name` to override the model name, `--md-out` / `--bim-out` for explicit paths.
+This connects to the live model over the local Analysis Services port via TOM, serializes it to `.bim` JSON (written to `output/`), then feeds it through the **same** `bim_to_kb_markdown.py` parser — producing `artifacts/model-schema/model-schema-<slug>.md` identically. **Always pass `--name`**: PBIP live sessions name the underlying AS catalog with an auto-generated GUID, not the model's display name, so without `--name` the script errors out instead of writing a GUID-named markdown file. Optional flags: `--port N` / `--connection-string S` to target a specific instance, `--md-out` / `--bim-out` for explicit paths.
 
 **One-time prerequisite:** provision the Analysis Services client DLLs into `libs/` (downloaded from NuGet — no Tabular Editor or .NET SDK required):
 
