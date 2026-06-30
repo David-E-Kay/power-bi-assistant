@@ -142,6 +142,8 @@ Use `/c-sharp-scripting` (see handoff map) for TOM relationship CRUD primitives.
 
 Default mutation path: C# / TOM or `te` automation. Do not use MCP to apply topology, DAX, calculation group, or bulk metadata changes unless the user explicitly approves a low-risk single-object edit.
 
+`dax_query_operations` (Execute/Validate) may be used pre-codegen for small, scoped read-only spot-checks — e.g. confirming a proposed DAX rewrite is numerically equivalent to the current measure before writing the C# script. It cannot mutate the model, but it has no timeout/memory watchdog, so keep it to single-row `EVALUATE ROW(...)` checks. Anything broader (full measure sweeps, cross-products) belongs in the `regression-testing` / `measure-benchmarking` engines, which have the safety stack.
+
 ### 4.1 Bulk DAX updates with regex
 
 The centerpiece C# pattern for removing USERELATIONSHIP/CROSSFILTER calls including surrounding commas:
