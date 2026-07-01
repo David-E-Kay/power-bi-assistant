@@ -1,5 +1,7 @@
 # Power BI Assistant
 
+![Power BI Assistant](docs/images/hero-agentic-pipeline.png)
+
 [![tests](https://github.com/David-E-Kay/power-bi-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/David-E-Kay/power-bi-assistant/actions/workflows/ci.yml)
 
 A [Claude Code](https://claude.com/claude-code) workspace that turns Claude into a focused assistant for Power BI semantic-model work — DAX optimization, data modeling, performance tuning, regression testing, model refactoring, and schema documentation.
