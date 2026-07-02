@@ -12,8 +12,8 @@ Topology refactor orchestrator + C# codegen for coordinated relationship/DAX cle
 This skill is an **orchestrator** — it delegates the real work to specialist plugin skills and **does not function without the data-goblin `power-bi-agentic-development` plugin** (install it from the Claude Code marketplace). Hard dependencies:
 
 - **REQUIRED:** `semantic-models:dax` — trace capture, SE/FE split, the MDL001-010 topology decision (Phase 1)
-- **REQUIRED:** `tabular-editor:bpa-rules` — authoring/running rules to flag bidir / inactive / unused relationships (Phase 2)
 - **REQUIRED:** `tabular-editor:c-sharp-scripting` — TOM relationship CRUD and bulk DAX edits (Phase 4)
+- **OPTIONAL:** a user-supplied Tabular Editor BPA violation export (BPA pane export, or `te bpa run --output-format json`) — evaluated in Phase 2 if the user has one; not authored, not required
 
 Model **mutation** (relationship CRUD, measure rewrites) legitimately needs TOM via TE C# scripting — which is why this skill keeps its C# codegen and is **not** a Python rewrite. The TE-free Python path (`scripts/capture_snapshot.py`) is read-only query execution, used only for Phase 5 validation via the `regression-testing` skill.
 
@@ -24,7 +24,7 @@ When a phase below says "use [skill] for X", **invoke it via the `Skill` tool an
 | Sub-task | Skill | Invocation |
 |---|---|---|
 | DAX trace capture, SE/FE split, MDL001-010 layout choice | `/dax` | `Skill(skill='semantic-models:dax')` |
-| Detecting bidir/M:M/inactive/unused-hidden via authored rule | `/bpa-rules` | `Skill(skill='tabular-editor:bpa-rules')` |
+| Detecting bidir/M:M/inactive/unused-hidden relationships | user-supplied BPA export | Ask the user to paste/attach it; see Phase 2.3/2.4 — do not author new rules here |
 | TOM relationship CRUD, measure expression updates | `/c-sharp-scripting` | `Skill(skill='tabular-editor:c-sharp-scripting')` |
 | Pre/post snapshot diff, Tier 1/2/3 validation | `regression-testing` | `Skill(skill='regression-testing')` |
 | Re-parse `.bim` after refactor | `bim-parsing` | `Skill(skill='bim-parsing')` |
@@ -83,9 +83,13 @@ ROW (
 
 ### 2.3 Identify unused inactive relationships
 
-Use `/bpa-rules` (see handoff map) to author and run a rule that flags inactive relationships with zero DAX references. Caveat: columns may be referenced in DAX but not through relationship traversal (e.g., same-table calculated columns). Only the relationship itself needs to be unreferenced, not the columns.
+Ask the user if they already have a Tabular Editor BPA violation export for this model (BPA pane "Export Results", or `te bpa run --output-format json`). If a rule flagging unused/inactive relationships already ran (built-in or org-authored), use those violations directly — do not re-derive them from scratch, and do not author a new BPA rule for this.
+
+If no such export exists or no matching rule was included, fall back to manual scanning: for each inactive relationship, grep all measures for `USERELATIONSHIP`/`CROSSFILTER` referencing its columns. Zero hits across the whole model's DAX is what "unused" means here. Caveat either way: columns may be referenced in DAX but not through relationship traversal (e.g., same-table calculated columns) — only the relationship itself needs to be unreferenced, not the columns.
 
 ### 2.4 Identify bidir reduction candidates
+
+If the user's BPA export includes `TE3_BUILT_IN_MANY_TO_MANY_SINGLE_DIRECTION` (or an equivalent org rule) violations, treat those as candidates to evaluate here — a BPA flag identifies the pattern, it doesn't tell you whether reducing bidir is actually safe. Confirm every candidate against the CROSSFILTER check below regardless of BPA status.
 
 For each bidir relationship, determine why bidir exists:
 - **Many-to-one where filter needs to flow "backwards"** — check if a direct FK would eliminate the need.
